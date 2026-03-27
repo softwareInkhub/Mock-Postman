@@ -15,11 +15,62 @@ const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 const DEFAULT_ANTHROPIC_VERSION = '2023-06-01';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
 const DEFAULT_ANTHROPIC_MAX_TOKENS = 1024;
+const MAX_ANTHROPIC_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 1200;
 
 const isPlainObject = (value) =>
   Object.prototype.toString.call(value) === '[object Object]';
 
 const normalizeBaseUrl = (baseUrl, fallback) => String(baseUrl || fallback).replace(/\/+$/, '');
+
+const wait = (durationMs) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
+
+const isAnthropicOverloadedError = (error) => {
+  const status = error.response?.status;
+  const type = String(error.response?.data?.error?.type || '').toLowerCase();
+  const message = String(
+    error.response?.data?.error?.message || error.response?.data?.error || error.message || ''
+  ).toLowerCase();
+
+  return (
+    status === 529 ||
+    status === 503 ||
+    type.includes('overloaded') ||
+    message.includes('overloaded') ||
+    message.includes('rate limit') ||
+    message.includes('temporarily unavailable')
+  );
+};
+
+const buildAnthropicErrorResponse = ({ error, requestPayload, startedAt, attempt }) => {
+  const status = error.response?.status || 502;
+  const message =
+    error.response?.data?.error?.message ||
+    error.response?.data?.error ||
+    error.message ||
+    'Failed to reach the Anthropic API.';
+
+  return {
+    success: false,
+    provider: 'anthropic',
+    model: requestPayload.model,
+    prompt: requestPayload.prompt,
+    error: {
+      message,
+      status,
+      details: error.response?.data || null,
+    },
+    meta: {
+      baseUrl: requestPayload.baseUrl,
+      durationMs: Date.now() - startedAt,
+      retriesAttempted: attempt,
+      retryable: isAnthropicOverloadedError(error),
+    },
+  };
+};
 
 const extractAnthropicText = (content = []) =>
   Array.isArray(content)
@@ -149,69 +200,64 @@ const generateWithAnthropic = async (payload = {}) => {
   const requestPayload = buildAnthropicPayload(payload);
   const startedAt = Date.now();
 
-  try {
-    const response = await axios.post(
-      `${requestPayload.baseUrl}/v1/messages`,
-      {
-        model: requestPayload.model,
-        max_tokens: requestPayload.maxTokens,
-        system: requestPayload.system,
-        messages: [
-          {
-            role: 'user',
-            content: requestPayload.prompt,
-          },
-        ],
-      },
-      {
-        timeout: requestPayload.timeout,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': requestPayload.apiKey,
-          'anthropic-version': requestPayload.version,
+  for (let attempt = 0; attempt <= MAX_ANTHROPIC_RETRIES; attempt += 1) {
+    try {
+      const response = await axios.post(
+        `${requestPayload.baseUrl}/v1/messages`,
+        {
+          model: requestPayload.model,
+          max_tokens: requestPayload.maxTokens,
+          system: requestPayload.system,
+          messages: [
+            {
+              role: 'user',
+              content: requestPayload.prompt,
+            },
+          ],
         },
+        {
+          timeout: requestPayload.timeout,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': requestPayload.apiKey,
+            'anthropic-version': requestPayload.version,
+          },
+        }
+      );
+
+      return {
+        success: true,
+        provider: 'anthropic',
+        model: response.data.model || requestPayload.model,
+        prompt: requestPayload.prompt,
+        system: requestPayload.system || null,
+        response: extractAnthropicText(response.data.content),
+        raw: response.data,
+        meta: {
+          baseUrl: requestPayload.baseUrl,
+          durationMs: Date.now() - startedAt,
+          stopReason: response.data.stop_reason || null,
+          inputTokens: response.data.usage?.input_tokens ?? null,
+          outputTokens: response.data.usage?.output_tokens ?? null,
+          retriesAttempted: attempt,
+        },
+      };
+    } catch (error) {
+      const retryable = isAnthropicOverloadedError(error);
+      const hasAttemptsLeft = attempt < MAX_ANTHROPIC_RETRIES;
+
+      if (!retryable || !hasAttemptsLeft) {
+        return buildAnthropicErrorResponse({
+          error,
+          requestPayload,
+          startedAt,
+          attempt,
+        });
       }
-    );
 
-    return {
-      success: true,
-      provider: 'anthropic',
-      model: response.data.model || requestPayload.model,
-      prompt: requestPayload.prompt,
-      system: requestPayload.system || null,
-      response: extractAnthropicText(response.data.content),
-      raw: response.data,
-      meta: {
-        baseUrl: requestPayload.baseUrl,
-        durationMs: Date.now() - startedAt,
-        stopReason: response.data.stop_reason || null,
-        inputTokens: response.data.usage?.input_tokens ?? null,
-        outputTokens: response.data.usage?.output_tokens ?? null,
-      },
-    };
-  } catch (error) {
-    const status = error.response?.status || 502;
-    const message =
-      error.response?.data?.error?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      'Failed to reach the Anthropic API.';
-
-    return {
-      success: false,
-      provider: 'anthropic',
-      model: requestPayload.model,
-      prompt: requestPayload.prompt,
-      error: {
-        message,
-        status,
-        details: error.response?.data || null,
-      },
-      meta: {
-        baseUrl: requestPayload.baseUrl,
-        durationMs: Date.now() - startedAt,
-      },
-    };
+      const delayMs = BASE_RETRY_DELAY_MS * 2 ** attempt;
+      await wait(delayMs);
+    }
   }
 };
 

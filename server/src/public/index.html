@@ -3,746 +3,291 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mock Postman + Schema Studio</title>
+    <title>BRMH</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+              display: ['Manrope', 'system-ui', 'sans-serif'],
+              mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+            },
+            colors: {
+              ink: '#08111f',
+              slate: '#6b7a90',
+              line: '#d6dfeb',
+              panel: '#fbfcfe',
+              panelStrong: '#f2f6fb',
+              accent: '#0f6cfd',
+              accentSoft: 'rgba(15, 108, 253, 0.12)',
+              emeraldSoft: 'rgba(11, 148, 93, 0.12)',
+              amberSoft: 'rgba(181, 111, 28, 0.12)',
+              roseSoft: 'rgba(202, 60, 76, 0.12)',
+            },
+            boxShadow: {
+              shell: '0 24px 60px rgba(8, 17, 31, 0.12)',
+              soft: '0 14px 35px rgba(8, 17, 31, 0.08)',
+            },
+            keyframes: {
+              'panel-in': {
+                '0%': { opacity: '0', transform: 'translateY(10px) scale(0.995)' },
+                '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+              },
+              shimmer: {
+                '0%': { backgroundPosition: '-200% 0' },
+                '100%': { backgroundPosition: '200% 0' },
+              },
+            },
+            animation: {
+              'panel-in': 'panel-in 220ms ease-out',
+              shimmer: 'shimmer 1.8s linear infinite',
+            },
+          },
+        },
+      };
+    </script>
     <style>
-      :root {
-        --bg: #f4f7fb;
-        --panel: #ffffff;
-        --panel-soft: #f7f9fc;
-        --border: #dbe3ee;
-        --border-strong: #c6d2e1;
-        --text: #162033;
-        --muted: #61708a;
-        --primary: #1358db;
-        --primary-soft: rgba(19, 88, 219, 0.1);
-        --emerald: #0d8a6a;
-        --emerald-soft: rgba(13, 138, 106, 0.1);
-        --amber: #8b5a10;
-        --amber-soft: rgba(139, 90, 16, 0.12);
-        --danger: #b63838;
-        --danger-soft: rgba(182, 56, 56, 0.1);
-        --shadow: 0 18px 50px rgba(22, 32, 51, 0.08);
+      html,
+      body,
+      #root {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+        color: #08111f;
+        background:
+          radial-gradient(circle at top left, rgba(15, 108, 253, 0.16), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(11, 148, 93, 0.12), transparent 26%),
+          linear-gradient(180deg, #f5f8fc 0%, #eef3f9 100%);
       }
 
       * {
         box-sizing: border-box;
       }
 
-      body {
-        margin: 0;
-        min-height: 100vh;
-        font-family: Inter, "Segoe UI", sans-serif;
-        color: var(--text);
-        background:
-          radial-gradient(circle at top left, rgba(19, 88, 219, 0.08), transparent 24%),
-          radial-gradient(circle at bottom right, rgba(13, 138, 106, 0.07), transparent 24%),
-          var(--bg);
+      .app-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(107, 122, 144, 0.42) transparent;
       }
 
-      button,
-      input,
-      select,
-      textarea {
-        font: inherit;
+      .app-scrollbar::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
       }
 
-      code,
-      pre {
-        font-family: Consolas, "Courier New", monospace;
-      }
-
-      .shell {
-        width: min(1440px, calc(100% - 28px));
-        margin: 18px auto 40px;
-        display: grid;
-        gap: 18px;
-      }
-
-      .hero,
-      .panel,
-      .result-panel,
-      .architecture-card,
-      .entity-card,
-      .relation-card,
-      .meta-card,
-      .diagram-card,
-      .modal-card {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 24px;
-        box-shadow: var(--shadow);
-      }
-
-      .hero {
-        padding: 28px;
-      }
-
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        padding: 8px 12px;
+      .app-scrollbar::-webkit-scrollbar-thumb {
+        border: 2px solid transparent;
         border-radius: 999px;
-        background: var(--primary-soft);
-        color: var(--primary);
-        font-size: 0.82rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
+        background: rgba(107, 122, 144, 0.35);
+        background-clip: content-box;
       }
 
-      .hero h1 {
-        margin: 14px 0 10px;
-        font-size: clamp(2rem, 4vw, 3.7rem);
-        line-height: 0.95;
-        letter-spacing: -0.04em;
+      .app-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
       }
 
-      .hero p {
-        margin: 0;
-        max-width: 920px;
-        color: var(--muted);
-        line-height: 1.7;
+      .glass {
+        backdrop-filter: blur(18px);
       }
 
-      .workflow-grid {
-        display: grid;
-        gap: 18px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      .skeleton {
+        background: linear-gradient(
+          90deg,
+          rgba(214, 223, 235, 0.5) 25%,
+          rgba(255, 255, 255, 0.95) 50%,
+          rgba(214, 223, 235, 0.5) 75%
+        );
+        background-size: 200% 100%;
       }
 
-      .panel,
-      .result-panel {
-        padding: 22px;
+      .cyber-logo {
+        background: linear-gradient(120deg, #67e8f9 0%, #60a5fa 32%, #c084fc 62%, #f472b6 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-shadow:
+          0 0 18px rgba(96, 165, 250, 0.22),
+          0 0 36px rgba(192, 132, 252, 0.16);
       }
 
-      .section-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 16px;
+      .cyber-frame {
+        position: relative;
+        overflow: hidden;
       }
 
-      .section-title {
-        margin: 0;
-        font-size: 1.15rem;
-      }
-
-      .section-copy {
-        margin: 6px 0 0;
-        color: var(--muted);
-        line-height: 1.6;
-      }
-
-      form {
-        display: grid;
-        gap: 14px;
-      }
-
-      .stack {
-        display: grid;
-        gap: 8px;
-      }
-
-      .grid-2 {
-        display: grid;
-        gap: 12px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .grid-3 {
-        display: grid;
-        gap: 12px;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      label {
-        font-size: 0.92rem;
-        font-weight: 600;
-      }
-
-      input,
-      select,
-      textarea {
-        width: 100%;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 12px 14px;
-        background: var(--panel-soft);
-        color: var(--text);
-      }
-
-      textarea {
-        min-height: 120px;
-        resize: vertical;
-        line-height: 1.55;
-      }
-
-      .toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-
-      button {
-        border: 0;
-        border-radius: 999px;
-        padding: 11px 16px;
-        cursor: pointer;
-        transition: transform 140ms ease, opacity 140ms ease;
-      }
-
-      button:hover {
-        transform: translateY(-1px);
-      }
-
-      button:disabled {
-        opacity: 0.6;
-        cursor: wait;
-        transform: none;
-      }
-
-      .primary-btn {
-        background: var(--primary);
-        color: white;
-      }
-
-      .secondary-btn {
-        background: #eaf0fb;
-        color: var(--text);
-      }
-
-      .ghost-btn {
-        background: white;
-        color: var(--primary);
-        border: 1px solid var(--border);
-      }
-
-      .hint {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.91rem;
-        line-height: 1.6;
-      }
-
-      .results-grid {
-        display: grid;
-        gap: 18px;
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .status-row,
-      .meta-grid,
-      .architecture-grid,
-      .entity-grid,
-      .relation-grid,
-      .diagram-grid {
-        display: grid;
-        gap: 14px;
-      }
-
-      .status-row {
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      }
-
-      .meta-grid {
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      }
-
-      .architecture-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .entity-grid,
-      .relation-grid {
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      }
-
-      .diagram-grid {
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      }
-
-      .meta-card,
-      .architecture-card,
-      .entity-card,
-      .relation-card,
-      .diagram-card {
-        padding: 18px;
-      }
-
-      .meta-card strong,
-      .meta-card span {
-        display: block;
-      }
-
-      .meta-card strong {
-        color: var(--muted);
-        font-size: 0.78rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
-
-      .meta-card span {
-        margin-top: 8px;
-        font-weight: 700;
-      }
-
-      .badge-row,
-      .pill-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .badge,
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        padding: 7px 11px;
-        font-size: 0.82rem;
-        font-weight: 600;
-      }
-
-      .badge.success {
-        background: var(--emerald-soft);
-        color: var(--emerald);
-      }
-
-      .badge.error {
-        background: var(--danger-soft);
-        color: var(--danger);
-      }
-
-      .badge.sql {
-        background: var(--primary-soft);
-        color: var(--primary);
-      }
-
-      .badge.nosql {
-        background: var(--amber-soft);
-        color: var(--amber);
-      }
-
-      .pill {
-        background: var(--panel-soft);
-        color: var(--muted);
-      }
-
-      .architecture-card {
-        display: grid;
-        gap: 16px;
-        align-content: start;
-      }
-
-      .architecture-top {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-      }
-
-      .architecture-card h3,
-      .entity-card h4,
-      .relation-card h4,
-      .diagram-card h4,
-      .modal-card h3 {
-        margin: 0;
-      }
-
-      .architecture-card p,
-      .entity-card p,
-      .relation-card p,
-      .diagram-card p,
-      .modal-card p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.6;
-      }
-
-      .subsection {
-        display: grid;
-        gap: 12px;
-      }
-
-      .subsection-title {
-        margin: 0;
-        font-size: 0.92rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--muted);
-      }
-
-      .field-list {
-        display: grid;
-        gap: 10px;
-      }
-
-      .field-item {
-        padding: 12px;
-        border-radius: 16px;
-        background: var(--panel-soft);
-        border: 1px solid var(--border);
-      }
-
-      .field-main {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        margin-bottom: 6px;
-      }
-
-      .field-name {
-        font-weight: 700;
-      }
-
-      .mini-label {
-        font-size: 0.82rem;
-        color: var(--muted);
-      }
-
-      pre {
-        margin: 0;
-        padding: 16px;
-        border-radius: 18px;
-        overflow: auto;
-        background: #0f1728;
-        color: #e8edf8;
-        line-height: 1.55;
-      }
-
-      .empty-state {
-        padding: 34px 20px;
-        border-radius: 22px;
-        border: 1px dashed var(--border-strong);
-        text-align: center;
-        color: var(--muted);
-        background: var(--panel-soft);
-      }
-
-      .modal {
-        position: fixed;
+      .cyber-frame::before {
+        content: '';
+        position: absolute;
         inset: 0;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        background: rgba(7, 15, 30, 0.58);
-        z-index: 20;
-      }
-
-      .modal.open {
-        display: flex;
-      }
-
-      .modal-card {
-        width: min(1180px, 100%);
-        max-height: min(92vh, 980px);
-        overflow: auto;
-        padding: 22px;
-      }
-
-      .modal-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 18px;
-      }
-
-      .close-btn {
-        background: white;
-        color: var(--text);
-        border: 1px solid var(--border);
-      }
-
-      @media (max-width: 1080px) {
-        .workflow-grid,
-        .architecture-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      @media (max-width: 760px) {
-        .shell {
-          width: min(100%, calc(100% - 18px));
-        }
-
-        .hero,
-        .panel,
-        .result-panel,
-        .modal-card {
-          padding: 18px;
-          border-radius: 20px;
-        }
-
-        .grid-2,
-        .grid-3 {
-          grid-template-columns: 1fr;
-        }
-
-        .toolbar button {
-          width: 100%;
-        }
+        background:
+          linear-gradient(135deg, rgba(103, 232, 249, 0.12), transparent 30%),
+          linear-gradient(315deg, rgba(244, 114, 182, 0.12), transparent 35%);
+        pointer-events: none;
       }
     </style>
   </head>
   <body>
-    <main class="shell">
-      <section class="hero">
-        <span class="eyebrow">Mock Postman + Schema Studio</span>
-        <h1>Test APIs and compare SQL vs NoSQL architecture on the same screen.</h1>
-        <p>
-          The Postman-style request builder stays fully available. Separately, schema generation
-          now returns a clean side-by-side comparison: SQL on one side, NoSQL on the other, with a
-          dedicated diagram button for each architecture.
-        </p>
-      </section>
+    <div id="root"></div>
 
-      <section class="workflow-grid">
-        <section class="panel">
-          <div class="section-head">
-            <div>
-              <h2 class="section-title">API Playground</h2>
-              <p class="section-copy">
-                Send HTTP requests through the existing backend proxy without losing the original
-                Postman flow.
-              </p>
-            </div>
-          </div>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-          <form id="request-form">
-            <div class="grid-2">
-              <div class="stack">
-                <label for="method">Method</label>
-                <select id="method" name="method">
-                  <option>GET</option>
-                  <option>POST</option>
-                  <option>PUT</option>
-                  <option>PATCH</option>
-                  <option>DELETE</option>
-                  <option>HEAD</option>
-                  <option>OPTIONS</option>
-                </select>
-              </div>
-              <div class="stack">
-                <label for="url">URL</label>
-                <input
-                  id="url"
-                  name="url"
-                  type="url"
-                  placeholder="https://api.example.com/resource"
-                  required
-                />
-              </div>
-            </div>
+    <script type="text/babel">
+      const { useEffect, useMemo, useRef, useState } = React;
 
-            <div class="stack">
-              <label for="timeout">Timeout (ms)</label>
-              <input id="timeout" name="timeout" type="number" min="1" value="15000" />
-            </div>
+      const NAV_ITEMS = [
+        {
+          id: 'api',
+          label: 'API Playground',
+          title: 'API Playground',
+          description: 'Compose, inspect, and replay HTTP requests with developer-friendly controls.',
+          helper: 'Send requests through the existing backend proxy.',
+        },
+        {
+          id: 'schema',
+          label: 'Schema Generator',
+          title: 'Schema Generator',
+          description: 'Generate SQL and NoSQL schemas from prompts, source JSON, and model settings.',
+          helper: 'AI-powered structure planning for relational and document models.',
+        },
+        {
+          id: 'response',
+          label: 'API Response',
+          title: 'API Response',
+          description: 'Inspect metadata, raw payloads, previews, and JSON views without leaving the workspace.',
+          helper: 'Tabs for JSON, raw output, and compact preview.',
+        },
+        {
+          id: 'comparison',
+          label: 'Schema Comparison',
+          title: 'Schema Comparison',
+          description: 'Review SQL and NoSQL architectures side by side in independent scroll regions.',
+          helper: 'Built for quick architectural tradeoff reviews.',
+        },
+        {
+          id: 'settings',
+          label: 'Settings',
+          title: 'Settings',
+          description: 'Reserve a stable home for provider defaults, plugins, and workspace preferences.',
+          helper: 'Designed for future extensibility.',
+        },
+      ];
 
-            <div class="stack">
-              <label for="headers">Headers JSON</label>
-              <textarea id="headers" name="headers" spellcheck="false">{}</textarea>
-            </div>
-
-            <div class="stack">
-              <label for="params">Query Params JSON</label>
-              <textarea id="params" name="params" spellcheck="false">{}</textarea>
-            </div>
-
-            <div class="stack">
-              <label for="body">Body JSON</label>
-              <textarea id="body" name="body" spellcheck="false">{}</textarea>
-            </div>
-
-            <div class="toolbar">
-              <button class="primary-btn" type="submit" id="send-button">Send Request</button>
-              <button class="secondary-btn" type="button" id="shopify-example">
-                Load Shopify Demo
-              </button>
-              <button class="secondary-btn" type="button" id="clear-request">Clear Request</button>
-            </div>
-
-            <p class="hint">
-              For GET and HEAD, the backend ignores the request body. Raw request and response data
-              stay visible below. The Shopify demo button preloads a public storefront product-list
-              request that you can run as-is.
-            </p>
-          </form>
-        </section>
-
-        <section class="panel">
-          <div class="section-head">
-            <div>
-              <h2 class="section-title">Schema Generator</h2>
-              <p class="section-copy">
-                Enter a product prompt and get two parallel architecture columns: one SQL and one
-                NoSQL.
-              </p>
-            </div>
-          </div>
-
-          <form id="schema-form">
-            <div class="stack">
-              <label for="prompt">Schema Prompt</label>
-              <textarea
-                id="prompt"
-                name="prompt"
-                placeholder="Design a project management platform where organizations own projects, projects contain tasks, tasks have comments, and users can be assigned to many tasks."
-                required
-              ></textarea>
-            </div>
-
-            <div class="grid-2">
-              <div class="stack">
-                <label for="provider">Provider</label>
-                <input id="provider" name="provider" type="text" placeholder="anthropic" />
-              </div>
-              <div class="stack">
-                <label for="model">Model</label>
-                <input
-                  id="model"
-                  name="model"
-                  type="text"
-                  placeholder="claude-sonnet-4-20250514"
-                />
-              </div>
-            </div>
-
-            <div class="stack">
-              <label for="source-data">Source JSON (Optional)</label>
-              <textarea
-                id="source-data"
-                name="sourceData"
-                spellcheck="false"
-                placeholder='{"projects":[{"id":"p1","name":"Launch","tasks":[{"id":"t1","title":"Draft copy"}]}]}'
-              ></textarea>
-            </div>
-
-            <div class="toolbar">
-              <button class="primary-btn" type="submit" id="generate-button">Generate Both</button>
-              <button class="secondary-btn" type="button" id="schema-example">
-                Use Example
-              </button>
-              <button class="ghost-btn" type="button" id="clear-schema">Clear Prompt</button>
-            </div>
-
-            <p class="hint">
-              This flow always requests both architectures so the user can compare SQL and NoSQL in
-              separate columns without ambiguity.
-            </p>
-          </form>
-        </section>
-      </section>
-
-      <section class="results-grid">
-        <section class="result-panel">
-          <div class="section-head">
-            <div>
-              <h2 class="section-title">API Response</h2>
-              <p class="section-copy">Postman results are preserved here.</p>
-            </div>
-          </div>
-          <div id="request-output" class="empty-state">
-            Send a request to inspect status, metadata, preview text, and raw JSON.
-          </div>
-        </section>
-
-        <section class="result-panel">
-          <div class="section-head">
-            <div>
-              <h2 class="section-title">Schema Comparison</h2>
-              <p class="section-copy">
-                SQL and NoSQL appear in their own columns so the comparison is direct and readable.
-              </p>
-            </div>
-          </div>
-          <div id="schema-output" class="empty-state">
-            Generate a schema to compare the two architectures side by side.
-          </div>
-        </section>
-      </section>
-
-      <section class="modal" id="diagram-modal" aria-hidden="true">
-        <div class="modal-card">
-          <div class="modal-head">
-            <div>
-              <h3 id="diagram-title">Schema Diagram</h3>
-              <p id="diagram-subtitle">Visual structure for the selected architecture.</p>
-            </div>
-            <button type="button" class="close-btn" id="close-diagram">Close</button>
-          </div>
-          <div id="diagram-content"></div>
-        </div>
-      </section>
-
-    <script>
-      const requestForm = document.getElementById('request-form');
-      const schemaForm = document.getElementById('schema-form');
-      const requestOutput = document.getElementById('request-output');
-      const schemaOutput = document.getElementById('schema-output');
-      const sendButton = document.getElementById('send-button');
-      const generateButton = document.getElementById('generate-button');
-      const shopifyExampleButton = document.getElementById('shopify-example');
-      const clearRequestButton = document.getElementById('clear-request');
-      const clearSchemaButton = document.getElementById('clear-schema');
-      const schemaExampleButton = document.getElementById('schema-example');
-      const diagramModal = document.getElementById('diagram-modal');
-      const diagramContent = document.getElementById('diagram-content');
-      const diagramTitle = document.getElementById('diagram-title');
-      const diagramSubtitle = document.getElementById('diagram-subtitle');
-      const closeDiagramButton = document.getElementById('close-diagram');
-
-      let lastSchemaResult = null;
-
-      const EXAMPLE_PROMPT =
-        'Create an e-commerce system where customers place orders, orders contain many products, products belong to categories, and sellers manage inventory and shipments.';
+      const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+      const RESPONSE_TABS = ['json', 'raw', 'preview'];
 
       const SHOPIFY_REQUEST_EXAMPLE = {
         method: 'GET',
         url: 'https://demostore.myshopify.com/products.json',
         timeout: 15000,
         headers: {
-          Accept: 'application/json'
+          Accept: 'application/json',
         },
         params: {
           limit: 3,
-          page: 1
+          page: 1,
         },
-        body: {}
+        body: {},
       };
 
-      const EXAMPLE_SOURCE = {
-        customers: [{ id: 'cust_1', email: 'maya@example.com', name: 'Maya' }],
-        orders: [
-          {
-            id: 'ord_1',
-            customerId: 'cust_1',
-            items: [{ productId: 'prod_1', quantity: 2 }],
-            shipment: { carrier: 'DHL', trackingNumber: 'TRK-1' }
-          }
-        ],
-        products: [{ id: 'prod_1', categoryId: 'cat_1', sellerId: 'seller_1', price: 49.99 }]
+      const initialApiForm = {
+        method: 'GET',
+        url: '',
+        timeout: '15000',
+        headers: '{}',
+        params: '{}',
+        body: '{}',
       };
 
-      const escapeHtml = (value) =>
-        String(value)
-          .replaceAll('&', '&amp;')
-          .replaceAll('<', '&lt;')
-          .replaceAll('>', '&gt;')
-          .replaceAll('"', '&quot;')
-          .replaceAll("'", '&#39;');
+      const initialSchemaForm = {
+        prompt: '',
+        provider: '',
+        model: '',
+        sourceData: '',
+      };
 
-      const formatJson = (value) => JSON.stringify(value, null, 2);
+      const iconClass = 'h-5 w-5 shrink-0';
 
-      const parseJsonField = (label, value, emptyValue = {}) => {
-        const trimmed = value.trim();
+      const IconBolt = () => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={iconClass}>
+          <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
+        </svg>
+      );
+
+      const IconSchema = () => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={iconClass}>
+          <rect x="3" y="4" width="7" height="6" rx="1.5" />
+          <rect x="14" y="4" width="7" height="6" rx="1.5" />
+          <rect x="8.5" y="14" width="7" height="6" rx="1.5" />
+          <path d="M10 7h4M12 10v4" />
+        </svg>
+      );
+
+      const IconResponse = () => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={iconClass}>
+          <path d="M8 7h10M8 12h8M8 17h10" />
+          <path d="m5 7-2 2 2 2M5 15l-2 2 2 2" />
+        </svg>
+      );
+
+      const IconCompare = () => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={iconClass}>
+          <rect x="3" y="4" width="7" height="16" rx="2" />
+          <rect x="14" y="4" width="7" height="16" rx="2" />
+          <path d="M10 8h4M10 16h4" />
+        </svg>
+      );
+
+      const IconSettings = () => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={iconClass}>
+          <path d="M12 3v3M12 18v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M3 12h3M18 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
+          <circle cx="12" cy="12" r="4" />
+        </svg>
+      );
+
+      const navIcons = {
+        api: IconBolt,
+        schema: IconSchema,
+        response: IconResponse,
+        comparison: IconCompare,
+        settings: IconSettings,
+      };
+
+      const classNames = (...parts) => parts.filter(Boolean).join(' ');
+
+      const formatJson = (value) => {
+        if (value === undefined) {
+          return '';
+        }
+
+        if (typeof value === 'string') {
+          return value;
+        }
+
+        try {
+          return JSON.stringify(value, null, 2);
+        } catch (error) {
+          return String(value);
+        }
+      };
+
+      const safeParseJson = (text, label) => {
+        const trimmed = String(text || '').trim();
 
         if (!trimmed) {
-          return emptyValue;
+          return {};
         }
 
         try {
@@ -752,690 +297,1298 @@
         }
       };
 
-      const singularize = (value) => {
-        const text = String(value || '').toLowerCase();
+      const formatBytes = (bytes) => {
+        const size = Number(bytes);
 
-        if (text.endsWith('ies')) {
-          return text.slice(0, -3) + 'y';
+        if (!Number.isFinite(size) || size < 0) {
+          return '0 B';
         }
 
-        if (text.endsWith('s') && !text.endsWith('ss')) {
-          return text.slice(0, -1);
+        if (size < 1024) {
+          return size + ' B';
         }
 
-        return text;
+        if (size < 1024 * 1024) {
+          return (size / 1024).toFixed(1) + ' KB';
+        }
+
+        return (size / (1024 * 1024)).toFixed(1) + ' MB';
       };
 
-      const buildRequestPayload = () => {
-        const method = requestForm.method.value;
-        const url = requestForm.url.value.trim();
-
-        if (!url) {
-          throw new Error('URL is required.');
+      const saveSchemaPreviewPayload = (payload) => {
+        try {
+          window.localStorage.setItem('brmh-schema-preview', JSON.stringify(payload));
+          return true;
+        } catch (error) {
+          console.error('Unable to store schema preview payload.', error);
+          return false;
         }
-
-        return {
-          method,
-          url,
-          headers: parseJsonField('Headers', requestForm.headers.value),
-          params: parseJsonField('Query params', requestForm.params.value),
-          body: parseJsonField('Body', requestForm.body.value, null),
-          timeout: Number(requestForm.timeout.value) || 15000
-        };
       };
 
-      const buildSchemaPayload = () => {
-        const prompt = schemaForm.prompt.value.trim();
-
-        if (!prompt) {
-          throw new Error('Schema prompt is required.');
-        }
-
-        const payload = {
-          prompt,
-          database: 'both',
-          includeSql: true
-        };
-
-        const provider = schemaForm.provider.value.trim();
-        const model = schemaForm.model.value.trim();
-        const sourceData = parseJsonField('Source JSON', schemaForm.sourceData.value, null);
-
-        if (provider) {
-          payload.provider = provider;
-        }
-
-        if (model) {
-          payload.model = model;
-        }
-
-        if (sourceData) {
-          payload.sourceData = sourceData;
-        }
-
-        return payload;
-      };
-
-      const inferNoSqlLinks = (collections) => {
-        const names = new Set(collections.map((collection) => collection.name));
-        const links = [];
-
-        collections.forEach((collection) => {
-          collection.document_shape.forEach((field) => {
-            const fieldName = String(field.name || '').toLowerCase();
-
-            if (!fieldName.endsWith('_id') && !fieldName.endsWith('ids')) {
-              return;
-            }
-
-            const normalized = fieldName.endsWith('ids')
-              ? fieldName.replace(/ids$/, '')
-              : fieldName.replace(/_id$/, '');
-            const target = singularize(normalized) + 's';
-
-            if (!names.has(target) || target === collection.name) {
-              return;
-            }
-
-            links.push({
+      const inferNoSqlLinks = (collections = []) =>
+        collections.flatMap((collection) =>
+          (collection.document_shape || [])
+            .filter((field) => /(_id|Ids|ids|Ref|ref)$/i.test(field.name || ''))
+            .map((field) => ({
               from: collection.name,
               field: field.name,
-              to: target
+              to: String(field.references || field.name)
+                .replace(/(_id|Ids|ids|Ref|ref)$/i, '')
+                .trim() || 'related collection',
+            }))
+        );
+
+      const getStatusTone = (status) => {
+        if (status >= 200 && status < 300) {
+          return 'emerald';
+        }
+
+        if (status >= 400) {
+          return 'rose';
+        }
+
+        return 'amber';
+      };
+
+      const StatusBadge = ({ label, tone = 'blue' }) => {
+        const tones = {
+          blue: 'bg-accentSoft text-accent',
+          emerald: 'bg-emeraldSoft text-emerald-700',
+          amber: 'bg-amberSoft text-amber-700',
+          rose: 'bg-roseSoft text-rose-700',
+          slate: 'bg-slate-100 text-slate-700',
+        };
+
+        return (
+          <span className={classNames('inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold', tones[tone])}>
+            {label}
+          </span>
+        );
+      };
+
+      const IconFrame = ({ children, active }) => (
+        <span
+          className={classNames(
+            'flex h-10 w-10 items-center justify-center rounded-2xl border transition-all duration-200',
+            active
+              ? 'border-transparent bg-ink text-white shadow-soft'
+              : 'border-line/80 bg-white/80 text-slate hover:border-accent/35 hover:text-ink'
+          )}
+        >
+          {children}
+        </span>
+      );
+
+      const LogoMark = () => (
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink text-white shadow-soft">
+          <div className="grid h-6 w-6 grid-cols-2 gap-1">
+            <span className="rounded-[5px] bg-white/95"></span>
+            <span className="rounded-[5px] bg-accent/80"></span>
+            <span className="rounded-[5px] bg-emerald-400"></span>
+            <span className="rounded-[5px] bg-white/70"></span>
+          </div>
+        </div>
+      );
+
+      const MiniPreviewVisual = ({ itemId }) => {
+        if (itemId === 'api') {
+          return (
+            <div className="rounded-2xl border border-line/80 bg-white/80 p-3">
+              <div className="mb-2 flex gap-2">
+                <span className="rounded-full bg-emeraldSoft px-2 py-1 text-[10px] font-semibold text-emerald-700">GET</span>
+                <div className="h-6 flex-1 rounded-xl bg-slate-100"></div>
+              </div>
+              <div className="grid gap-2">
+                <div className="h-9 rounded-xl bg-slate-100"></div>
+                <div className="h-16 rounded-2xl bg-slate-50"></div>
+              </div>
+            </div>
+          );
+        }
+
+        if (itemId === 'schema') {
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-line/80 bg-white/80 p-3">
+                <div className="mb-2 h-3 w-16 rounded-full bg-accentSoft"></div>
+                <div className="space-y-2">
+                  <div className="h-8 rounded-xl bg-slate-100"></div>
+                  <div className="h-8 rounded-xl bg-slate-50"></div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-line/80 bg-white/80 p-3">
+                <div className="mb-2 h-3 w-16 rounded-full bg-amberSoft"></div>
+                <div className="space-y-2">
+                  <div className="h-8 rounded-xl bg-slate-100"></div>
+                  <div className="h-8 rounded-xl bg-slate-50"></div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="rounded-2xl border border-line/80 bg-white/80 p-3">
+            <div className="mb-2 flex gap-2">
+              <div className="h-7 w-20 rounded-xl bg-slate-100"></div>
+              <div className="h-7 w-16 rounded-xl bg-slate-50"></div>
+            </div>
+            <div className="space-y-2">
+              <div className="h-12 rounded-2xl bg-slate-100"></div>
+              <div className="h-8 rounded-xl bg-slate-50"></div>
+            </div>
+          </div>
+        );
+      };
+
+      const PreviewTooltip = ({ preview }) => {
+        if (!preview) {
+          return null;
+        }
+
+        const style = {
+          top: preview.top,
+          left: preview.left,
+        };
+
+        return (
+          <div
+            className="pointer-events-none fixed z-50 hidden w-80 origin-left rounded-3xl border border-white/70 bg-white/88 p-4 shadow-shell ring-1 ring-slate-200/60 glass xl:block"
+            style={style}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="font-display text-base font-extrabold text-ink">{preview.title}</p>
+                <p className="mt-1 text-sm leading-6 text-slate">{preview.description}</p>
+              </div>
+              <StatusBadge label="Preview" tone="blue" />
+            </div>
+            <MiniPreviewVisual itemId={preview.id} />
+            <p className="mt-3 text-xs leading-5 text-slate">{preview.helper}</p>
+          </div>
+        );
+      };
+
+      const Sidebar = ({ activePanel, onSelect }) => {
+        const [preview, setPreview] = useState(null);
+        const timerRef = useRef(null);
+
+        const hidePreview = () => {
+          window.clearTimeout(timerRef.current);
+          setPreview(null);
+        };
+
+        const showPreview = (item, event) => {
+          window.clearTimeout(timerRef.current);
+          const rect = event.currentTarget.getBoundingClientRect();
+
+          timerRef.current = window.setTimeout(() => {
+            setPreview({
+              ...item,
+              top: Math.max(20, rect.top - 8),
+              left: rect.right + 18,
             });
-          });
-        });
+          }, 200);
+        };
 
-        return links;
-      };
+        useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
-      const renderRequestResult = (payload, isError = false) => {
-        const status = payload.response?.status ?? payload.error?.status ?? 'N/A';
-        const statusText = payload.response?.statusText ?? payload.error?.statusText ?? '';
-        const meta = payload.response?.meta ?? payload.error?.meta ?? {};
-        const preview = payload.response?.preview ?? payload.error?.preview ?? '(empty)';
-
-        requestOutput.className = '';
-        requestOutput.innerHTML = `
-          <div class="status-row">
-            <div class="meta-card">
-              <strong>State</strong>
-              <span><span class="badge ${isError ? 'error' : 'success'}">${isError ? 'Error' : 'Success'}</span></span>
-            </div>
-            <div class="meta-card">
-              <strong>Status</strong>
-              <span>${escapeHtml(status)} ${escapeHtml(statusText)}</span>
-            </div>
-            <div class="meta-card">
-              <strong>Duration</strong>
-              <span>${escapeHtml(meta.durationMs ?? 'N/A')} ms</span>
-            </div>
-            <div class="meta-card">
-              <strong>Content Type</strong>
-              <span>${escapeHtml(meta.contentType ?? 'N/A')}</span>
-            </div>
-          </div>
-          <div class="subsection">
-            <h3 class="subsection-title">Preview</h3>
-            <pre>${escapeHtml(preview)}</pre>
-          </div>
-          <div class="subsection">
-            <h3 class="subsection-title">Raw JSON</h3>
-            <pre>${escapeHtml(formatJson(payload))}</pre>
-          </div>
-        `;
-      };
-
-      const renderFieldPills = (field, isSql) => {
-        const parts = [`<span class="pill">${escapeHtml(field.type || 'unknown')}</span>`];
-
-        if (field.primary) {
-          parts.push('<span class="pill">Primary Key</span>');
-        }
-
-        if (field.required) {
-          parts.push('<span class="pill">Required</span>');
-        }
-
-        if (isSql && field.foreign_key) {
-          parts.push(`<span class="pill">FK -> ${escapeHtml(field.foreign_key)}</span>`);
-        }
-
-        return parts.join('');
-      };
-
-      const renderSqlArchitectureCard = (architecture) => {
-        const relationships = (architecture.tables || []).flatMap((table) =>
-          table.columns
-            .filter((column) => column.foreign_key)
-            .map((column) => ({
-              source: `${table.name}.${column.name}`,
-              target: column.foreign_key
-            }))
-        );
-
-        return `
-          <article class="architecture-card">
-            <div class="architecture-top">
-              <div>
-                <div class="badge-row">
-                  <span class="badge sql">SQL</span>
-                  <span class="pill">${escapeHtml(architecture.database_engine)}</span>
+        return (
+          <>
+            <aside className="hidden h-full w-[280px] shrink-0 xl:flex xl:flex-col xl:gap-6 xl:border-r xl:border-white/70 xl:bg-white/65 xl:p-5 xl:shadow-soft xl:backdrop-blur-xl">
+              <div className="rounded-[28px] border border-white/80 bg-white/80 p-5 shadow-soft">
+                <div className="flex items-center gap-3">
+                  <LogoMark />
+                  <div>
+                    <p className="font-display text-2xl font-extrabold tracking-[-0.04em] text-ink">BRMH</p>
+                    <p className="text-sm text-slate">AI-Powered API &amp; Schema Engine</p>
+                  </div>
                 </div>
-                <h3>Relational Architecture</h3>
-                <p>${escapeHtml(architecture.use_case || 'Normalized relational design.')}</p>
               </div>
-              <button type="button" class="ghost-btn" data-diagram="sql">Open Diagram</button>
-            </div>
 
-            <div class="meta-grid">
-              <div class="meta-card">
-                <strong>Tables</strong>
-                <span>${escapeHtml((architecture.tables || []).length)}</span>
-              </div>
-              <div class="meta-card">
-                <strong>Relationships</strong>
-                <span>${escapeHtml(relationships.length)}</span>
-              </div>
-            </div>
+              <nav className="flex min-h-0 flex-1 flex-col gap-2">
+                {NAV_ITEMS.map((item) => {
+                  const Icon = navIcons[item.id];
+                  const active = activePanel === item.id;
 
-            <div class="subsection">
-              <h4 class="subsection-title">Relationships</h4>
-              <div class="relation-grid">
-                ${
-                  relationships.length
-                    ? relationships
-                        .map(
-                          (relation) => `
-                            <div class="relation-card">
-                              <h4>${escapeHtml(relation.source)}</h4>
-                              <p>References <code>${escapeHtml(relation.target)}</code></p>
-                            </div>
-                          `
-                        )
-                        .join('')
-                    : `
-                      <div class="relation-card">
-                        <h4>No foreign keys listed</h4>
-                        <p>This architecture did not return any explicit SQL relationships.</p>
-                      </div>
-                    `
-                }
-              </div>
-            </div>
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onSelect(item.id)}
+                      onMouseEnter={(event) => showPreview(item, event)}
+                      onMouseLeave={hidePreview}
+                      className={classNames(
+                        'group flex items-center gap-3 rounded-[22px] border px-3 py-3 text-left transition-all duration-200',
+                        active
+                          ? 'border-transparent bg-ink text-white shadow-soft'
+                          : 'border-white/60 bg-white/70 text-ink hover:border-accent/25 hover:bg-white'
+                      )}
+                    >
+                      <IconFrame active={active}>
+                        <Icon />
+                      </IconFrame>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">{item.label}</span>
+                        <span className={classNames('mt-1 block truncate text-xs', active ? 'text-white/70' : 'text-slate')}>
+                          {item.helper}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
 
-            <div class="subsection">
-              <h4 class="subsection-title">Tables</h4>
-              <div class="entity-grid">
-                ${(architecture.tables || [])
-                  .map(
-                    (table) => `
-                      <div class="entity-card">
-                        <h4>${escapeHtml(table.name)}</h4>
-                        <p>${escapeHtml(table.description || 'Core SQL table.')}</p>
-                        <div class="field-list">
-                          ${table.columns
-                            .map(
-                              (column) => `
-                                <div class="field-item">
-                                  <div class="field-main">
-                                    <span class="field-name">${escapeHtml(column.name)}</span>
-                                    ${renderFieldPills(column, true)}
-                                  </div>
-                                  <div class="mini-label">${escapeHtml(column.description || 'No description provided.')}</div>
-                                </div>
-                              `
-                            )
-                            .join('')}
-                        </div>
-                      </div>
-                    `
-                  )
-                  .join('')}
+              <div className="rounded-[24px] border border-dashed border-line bg-panelStrong/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate">Workspace Model</p>
+                <p className="mt-2 text-sm leading-6 text-slate">
+                  Non-scrolling shell, independently scrollable panels, and a stable surface for future tools.
+                </p>
               </div>
-            </div>
-          </article>
-        `;
+            </aside>
+
+            <PreviewTooltip preview={preview} />
+          </>
+        );
       };
 
-      const renderNoSqlArchitectureCard = (architecture) => {
-        const collections = architecture.collections || [];
-        const links = inferNoSqlLinks(collections);
+      const MobileRail = ({ activePanel, onSelect }) => (
+        <div className="flex gap-2 overflow-x-auto rounded-[24px] border border-white/70 bg-white/70 p-2 shadow-soft app-scrollbar xl:hidden">
+          {NAV_ITEMS.map((item) => {
+            const Icon = navIcons[item.id];
+            const active = activePanel === item.id;
 
-        return `
-          <article class="architecture-card">
-            <div class="architecture-top">
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelect(item.id)}
+                className={classNames(
+                  'flex min-w-max items-center gap-2 rounded-2xl px-3 py-2 text-sm transition-colors',
+                  active ? 'bg-ink text-white' : 'bg-white text-ink'
+                )}
+              >
+                <Icon />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      );
+
+      const PanelContainer = ({ eyebrow, title, description, actions, children }) => (
+        <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[30px] border border-white/80 bg-white/78 shadow-shell glass">
+          <header className="sticky top-0 z-20 border-b border-line/80 bg-white/88 px-5 py-4 backdrop-blur-xl">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div class="badge-row">
-                  <span class="badge nosql">NoSQL</span>
-                  <span class="pill">${escapeHtml(architecture.database_engine)}</span>
-                </div>
-                <h3>Document Architecture</h3>
-                <p>${escapeHtml(architecture.use_case || 'Flexible collection-based design.')}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate">{eyebrow}</p>
+                <h1 className="mt-2 font-display text-[28px] font-extrabold tracking-[-0.04em] text-ink">{title}</h1>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate">{description}</p>
               </div>
-              <button type="button" class="ghost-btn" data-diagram="nosql">Open Diagram</button>
+              {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
             </div>
+          </header>
+          <div className="min-h-0 flex-1 p-4">{children}</div>
+        </section>
+      );
 
-            <div class="meta-grid">
-              <div class="meta-card">
-                <strong>Collections</strong>
-                <span>${escapeHtml(collections.length)}</span>
+      const ScrollableSection = ({ title, description, actions, children, className = '' }) => (
+        <section className={classNames('flex min-h-0 flex-col overflow-hidden rounded-[26px] border border-line/80 bg-panel', className)}>
+          <div className="sticky top-0 z-10 border-b border-line/70 bg-panel/95 px-4 py-4 backdrop-blur">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg font-extrabold tracking-[-0.03em] text-ink">{title}</h2>
+                {description ? <p className="mt-1 text-sm leading-6 text-slate">{description}</p> : null}
               </div>
-              <div class="meta-card">
-                <strong>Reference Hints</strong>
-                <span>${escapeHtml(links.length)}</span>
-              </div>
+              {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
             </div>
+          </div>
+          <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+        </section>
+      );
 
-            <div class="subsection">
-              <h4 class="subsection-title">Collection Relationships</h4>
-              <div class="relation-grid">
-                ${
-                  links.length
-                    ? links
-                        .map(
-                          (link) => `
-                            <div class="relation-card">
-                              <h4>${escapeHtml(link.from)}.${escapeHtml(link.field)}</h4>
-                              <p>Points toward <code>${escapeHtml(link.to)}</code></p>
-                            </div>
-                          `
-                        )
-                        .join('')
-                    : `
-                      <div class="relation-card">
-                        <h4>No reference-style fields inferred</h4>
-                        <p>This NoSQL model reads more like an embedded document structure.</p>
-                      </div>
-                    `
+      const InputField = ({ label, children, hint, labelClassName = 'text-ink', hintClassName = 'text-slate' }) => (
+        <label className="grid gap-2">
+          <span className={classNames('text-sm font-semibold', labelClassName)}>{label}</span>
+          {children}
+          {hint ? <span className={classNames('text-xs leading-5', hintClassName)}>{hint}</span> : null}
+        </label>
+      );
+
+      const fieldClassName =
+        'w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-accent focus:ring-4 focus:ring-accentSoft';
+
+      const ToolbarButton = ({ children, tone = 'secondary', ...props }) => {
+        const tones = {
+          primary: 'bg-ink text-white hover:bg-slate-900',
+          secondary: 'bg-white text-ink border border-line hover:border-accent/30 hover:text-accent',
+          ghost: 'bg-panelStrong text-slate hover:text-ink',
+        };
+
+        return (
+          <button
+            {...props}
+            className={classNames(
+              'rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 disabled:cursor-wait disabled:opacity-60',
+              tones[tone],
+              props.className
+            )}
+          >
+            {children}
+          </button>
+        );
+      };
+
+      const EmptyState = ({ title, copy }) => (
+        <div className="flex h-full min-h-[220px] flex-col items-center justify-center rounded-[24px] border border-dashed border-line bg-panelStrong/70 px-6 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-soft">
+            <IconResponse />
+          </div>
+          <h3 className="font-display text-xl font-extrabold tracking-[-0.03em] text-ink">{title}</h3>
+          <p className="mt-2 max-w-md text-sm leading-6 text-slate">{copy}</p>
+        </div>
+      );
+
+      const LoadingSkeleton = ({ lines = 6 }) => (
+        <div className="space-y-3">
+          {Array.from({ length: lines }).map((_, index) => (
+            <div
+              key={index}
+              className={classNames(
+                'skeleton animate-shimmer rounded-2xl',
+                index === 0 ? 'h-12 w-1/3' : index === lines - 1 ? 'h-24 w-full' : 'h-10 w-full'
+              )}
+            ></div>
+          ))}
+        </div>
+      );
+
+      const AlertBox = ({ title, copy }) => (
+        <div className="rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-4 text-rose-800">
+          <p className="font-semibold">{title}</p>
+          <p className="mt-1 text-sm leading-6">{copy}</p>
+        </div>
+      );
+
+      const KeyMetric = ({ label, value, tone = 'slate' }) => (
+        <div className="rounded-[22px] border border-line bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate">{label}</p>
+          <div className="mt-3 flex items-center gap-2">
+            <p className="font-display text-2xl font-extrabold tracking-[-0.04em] text-ink">{value}</p>
+            {tone !== 'slate' ? (
+              <StatusBadge
+                label={
+                  tone === 'success'
+                    ? 'Healthy'
+                    : tone === 'emerald'
+                      ? 'Success'
+                      : tone === 'rose'
+                        ? 'Error'
+                        : tone === 'amber'
+                          ? 'Pending'
+                          : tone
                 }
+                tone={tone === 'success' ? 'emerald' : tone}
+              />
+            ) : null}
+          </div>
+        </div>
+      );
+
+      const CodeBlock = ({ value }) => (
+        <pre className="overflow-x-auto rounded-[22px] bg-[#0a1220] p-4 font-mono text-xs leading-6 text-slate-100 app-scrollbar">
+          {value}
+        </pre>
+      );
+
+      const ResponseViewer = ({ result, loading, activeTab, onTabChange }) => {
+        const tabs = {
+          json: result
+            ? formatJson(result.success ? result.response?.data : result.error?.data || result)
+            : '',
+          raw: result ? formatJson(result) : '',
+          preview: result ? (result.success ? result.response?.preview : result.error?.preview) || '(empty)' : '',
+        };
+
+        return (
+          <ScrollableSection
+            title="Response Viewer"
+            description="Sticky controls, internal scrolling, and tabbed inspection for developer workflows."
+            actions={
+              <div className="flex rounded-2xl bg-panelStrong p-1">
+                {RESPONSE_TABS.map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => onTabChange(tab)}
+                    className={classNames(
+                      'rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition-colors',
+                      activeTab === tab ? 'bg-white text-ink shadow-sm' : 'text-slate'
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
               </div>
+            }
+            className="h-full"
+          >
+            {loading ? (
+              <LoadingSkeleton lines={7} />
+            ) : !result ? (
+              <EmptyState
+                title="No response captured yet"
+                copy="Send a request from API Playground to populate this panel. The workspace stays fixed while each viewer scrolls internally."
+              />
+            ) : (
+              <div className="grid h-full gap-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <KeyMetric label="Status" value={String(result.success ? result.response?.status : result.error?.status || 'N/A')} tone={getStatusTone(result.success ? result.response?.status : result.error?.status)} />
+                  <KeyMetric label="Duration" value={String(result.success ? result.response?.meta?.durationMs : result.error?.meta?.durationMs || 0) + ' ms'} />
+                  <KeyMetric label="Size" value={formatBytes(result.success ? result.response?.meta?.sizeBytes : result.error?.meta?.sizeBytes)} />
+                  <KeyMetric label="Content Type" value={result.success ? result.response?.meta?.contentType || 'unknown' : result.error?.meta?.contentType || 'unknown'} />
+                </div>
+
+                {!result.success ? (
+                  <AlertBox title="Request failed" copy={result.error?.message || 'The request could not be completed.'} />
+                ) : null}
+
+                <CodeBlock value={tabs[activeTab]} />
+              </div>
+            )}
+          </ScrollableSection>
+        );
+      };
+
+      const RequestSnapshot = ({ result }) => (
+        <ScrollableSection title="Request Snapshot" description="Inspect the normalized request payload that BRMH sent through the proxy." className="h-full">
+          {!result ? (
+            <EmptyState title="Request snapshot will appear here" copy="Method, URL, timeout, headers, and body are mirrored here after a request is sent." />
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <KeyMetric label="Method" value={result.request?.method || 'GET'} />
+                <KeyMetric label="Timeout" value={String(result.request?.timeout || 0) + ' ms'} />
+                <KeyMetric label="Params" value={String(Object.keys(result.request?.params || {}).length)} />
+                <KeyMetric label="Headers" value={String(Object.keys(result.request?.headers || {}).length)} />
+              </div>
+              <CodeBlock value={formatJson(result.request || {})} />
+            </div>
+          )}
+        </ScrollableSection>
+      );
+
+      const APIForm = ({
+        formState,
+        onChange,
+        onSubmit,
+        onLoadExample,
+        onClear,
+        loading,
+        localError,
+      }) => (
+        <ScrollableSection
+          title="Request Composer"
+          description="A production-style request builder with independent scrolling and sticky context."
+          className="h-full"
+        >
+          <form onSubmit={onSubmit} className="grid gap-4">
+            <div className="grid gap-4 lg:grid-cols-[160px_minmax(0,1fr)]">
+              <InputField label="Method">
+                <select className={fieldClassName} value={formState.method} onChange={(event) => onChange('method', event.target.value)}>
+                  {METHOD_OPTIONS.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </InputField>
+
+              <InputField label="URL">
+                <input
+                  className={fieldClassName}
+                  type="url"
+                  value={formState.url}
+                  onChange={(event) => onChange('url', event.target.value)}
+                  placeholder="https://api.example.com/resource"
+                  required
+                />
+              </InputField>
             </div>
 
-            <div class="subsection">
-              <h4 class="subsection-title">Collections</h4>
-              <div class="entity-grid">
-                ${collections
-                  .map(
-                    (collection) => `
-                      <div class="entity-card">
-                        <h4>${escapeHtml(collection.name)}</h4>
-                        <p>${escapeHtml(collection.description || 'Core NoSQL collection.')}</p>
-                        <div class="field-list">
-                          ${collection.document_shape
-                            .map(
-                              (field) => `
-                                <div class="field-item">
-                                  <div class="field-main">
-                                    <span class="field-name">${escapeHtml(field.name)}</span>
-                                    ${renderFieldPills(field, false)}
-                                  </div>
-                                  <div class="mini-label">${escapeHtml(field.description || 'No description provided.')}</div>
-                                </div>
-                              `
-                            )
-                            .join('')}
+            <InputField label="Timeout (ms)">
+              <input
+                className={fieldClassName}
+                type="number"
+                min="1"
+                value={formState.timeout}
+                onChange={(event) => onChange('timeout', event.target.value)}
+              />
+            </InputField>
+
+            <InputField label="Headers JSON" hint="Hop-by-hop headers are sanitized by the backend service.">
+              <textarea
+                className={classNames(fieldClassName, 'min-h-[120px] resize-none font-mono')}
+                spellCheck="false"
+                value={formState.headers}
+                onChange={(event) => onChange('headers', event.target.value)}
+              />
+            </InputField>
+
+            <InputField label="Query Params JSON">
+              <textarea
+                className={classNames(fieldClassName, 'min-h-[120px] resize-none font-mono')}
+                spellCheck="false"
+                value={formState.params}
+                onChange={(event) => onChange('params', event.target.value)}
+              />
+            </InputField>
+
+            <InputField label="Body JSON" hint="Ignored automatically for GET and HEAD requests.">
+              <textarea
+                className={classNames(fieldClassName, 'min-h-[160px] resize-none font-mono')}
+                spellCheck="false"
+                value={formState.body}
+                onChange={(event) => onChange('body', event.target.value)}
+              />
+            </InputField>
+
+            {localError ? <AlertBox title="Validation issue" copy={localError} /> : null}
+
+            <div className="flex flex-wrap gap-3">
+              <ToolbarButton type="submit" tone="primary" disabled={loading}>
+                {loading ? 'Sending Request...' : 'Send Request'}
+              </ToolbarButton>
+              <ToolbarButton type="button" tone="secondary" onClick={onLoadExample}>
+                Load Shopify Demo
+              </ToolbarButton>
+              <ToolbarButton type="button" tone="ghost" onClick={onClear}>
+                Clear Request
+              </ToolbarButton>
+            </div>
+          </form>
+        </ScrollableSection>
+      );
+
+      const ArchitectureCard = ({ architecture }) => {
+        const isSql = architecture.database_type === 'sql';
+        const relationships = isSql
+          ? (architecture.tables || []).flatMap((table) =>
+              (table.columns || [])
+                .filter((column) => column.foreign_key)
+                .map((column) => ({ source: table.name + '.' + column.name, target: column.foreign_key }))
+            )
+          : inferNoSqlLinks(architecture.collections || []);
+        const entities = isSql ? architecture.tables || [] : architecture.collections || [];
+
+        return (
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-line bg-white">
+            <div className="sticky top-0 z-10 border-b border-line/70 bg-white/90 px-4 py-4 backdrop-blur">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge label={isSql ? 'SQL' : 'NoSQL'} tone={isSql ? 'blue' : 'amber'} />
+                    <StatusBadge label={architecture.database_engine || 'engine'} tone="slate" />
+                  </div>
+                  <h3 className="mt-3 font-display text-xl font-extrabold tracking-[-0.03em] text-ink">
+                    {isSql ? 'Relational Model' : 'Document Model'}
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-slate">{architecture.use_case || 'Architecture summary unavailable.'}</p>
+                </div>
+                <div className="rounded-2xl bg-panelStrong px-3 py-2 text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate">
+                    {isSql ? 'Tables' : 'Collections'}
+                  </p>
+                  <p className="mt-1 font-display text-2xl font-extrabold tracking-[-0.04em] text-ink">{entities.length}</p>
+                </div>
+              </div>
+            </div>
+            <div className="app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <KeyMetric label={isSql ? 'Relationships' : 'Reference Hints'} value={String(relationships.length)} />
+                <KeyMetric label="Use Case" value={architecture.database_engine || 'default'} />
+              </div>
+
+              <div className="rounded-[22px] border border-line bg-panelStrong/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate">Relationships</p>
+                <div className="mt-3 grid gap-3">
+                  {relationships.length ? (
+                    relationships.map((item, index) => (
+                      <div key={index} className="rounded-2xl border border-line bg-white p-3">
+                        <p className="font-semibold text-ink">{item.source || item.from + '.' + item.field}</p>
+                        <p className="mt-1 text-sm text-slate">
+                          {isSql ? 'References ' + item.target : 'Points toward ' + item.to}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm leading-6 text-slate">No explicit relationships were returned for this architecture.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {entities.map((entity, index) => {
+                  const fields = isSql ? entity.columns || [] : entity.document_shape || [];
+
+                  return (
+                    <article key={index} className="rounded-[22px] border border-line bg-white p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-display text-lg font-extrabold tracking-[-0.03em] text-ink">{entity.name}</h4>
+                          <p className="mt-1 text-sm leading-6 text-slate">{entity.description || 'No description provided.'}</p>
                         </div>
+                        <StatusBadge label={String(fields.length) + ' fields'} tone="slate" />
                       </div>
-                    `
-                  )
-                  .join('')}
+                      <div className="mt-4 grid gap-3">
+                        {fields.map((field, fieldIndex) => (
+                          <div key={fieldIndex} className="rounded-2xl border border-line bg-panelStrong/70 p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-ink">{field.name}</p>
+                              {field.type ? <StatusBadge label={field.type} tone="slate" /> : null}
+                              {field.primary_key ? <StatusBadge label="PK" tone="blue" /> : null}
+                              {field.required ? <StatusBadge label="Required" tone="emerald" /> : null}
+                              {field.foreign_key ? <StatusBadge label="FK" tone="amber" /> : null}
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-slate">{field.description || 'No field description provided.'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
-          </article>
-        `;
-      };
-
-      const renderSqlDiagram = (architecture) => {
-        const relationships = (architecture.tables || []).flatMap((table) =>
-          table.columns
-            .filter((column) => column.foreign_key)
-            .map((column) => ({
-              source: `${table.name}.${column.name}`,
-              target: column.foreign_key
-            }))
+          </div>
         );
+      };
 
-        return `
-          <div class="subsection">
-            <h4 class="subsection-title">Relationship Map</h4>
-            <div class="relation-grid">
-              ${
-                relationships.length
-                  ? relationships
-                      .map(
-                        (relation) => `
-                          <div class="diagram-card">
-                            <h4>${escapeHtml(relation.source)}</h4>
-                            <p>connects to <code>${escapeHtml(relation.target)}</code></p>
+      const BrandCanvasPanel = ({ title = 'BRMH Workspace', subtitle = 'The center canvas is intentionally held open for future graph, preview, and split-view interactions.' }) => (
+        <PanelContainer
+          eyebrow="Core Canvas"
+          title={title}
+          description={subtitle}
+          actions={<StatusBadge label="Center Reserved" tone="blue" />}
+        >
+          <div className="flex h-full min-h-0 items-center justify-center">
+            <div className="cyber-frame flex h-full w-full items-center justify-center rounded-[32px] border border-white/80 bg-[#08111f] px-8 shadow-[0_30px_80px_rgba(8,17,31,0.28)]">
+              <div className="relative text-center">
+                <p className="mb-4 text-xs font-semibold uppercase tracking-[0.45em] text-cyan-200/70">Conversational API Intelligence</p>
+                <h2 className="cyber-logo font-display text-[clamp(4rem,11vw,8.5rem)] font-extrabold tracking-[0.28em]">BRMH</h2>
+                <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300">
+                  Cyberpunk shell placeholder for the future central workspace. Schema generation now lives in the right dock so the middle stays clean and focused.
+                </p>
+              </div>
+            </div>
+          </div>
+        </PanelContainer>
+      );
+
+      const APIPlaygroundPanel = (props) => (
+        <PanelContainer
+          eyebrow="Developer Workspace"
+          title="API Playground"
+          description="A non-scrolling BRMH workspace modeled after modern developer tools: request composition on the left, response analysis on the right, and every column scrolling independently."
+          actions={<StatusBadge label="Live Proxy" tone="blue" />}
+        >
+          <div className="grid h-full min-h-0 gap-4 2xl:grid-cols-[minmax(360px,430px)_minmax(0,1fr)]">
+            <APIForm {...props} />
+            <div className="grid min-h-0 gap-4 xl:grid-rows-[minmax(0,1fr)_minmax(0,0.78fr)]">
+              <ResponseViewer result={props.requestResult} loading={props.requestLoading} activeTab={props.responseTab} onTabChange={props.onResponseTabChange} />
+              <RequestSnapshot result={props.requestResult} />
+            </div>
+          </div>
+        </PanelContainer>
+      );
+
+      const ResponsePanel = ({ requestResult, requestLoading, responseTab, onResponseTabChange }) => (
+        <PanelContainer
+          eyebrow="Request Inspection"
+          title="API Response"
+          description="A dedicated response-focused workspace with internal tabs for JSON, raw output, and preview content."
+          actions={requestResult ? <StatusBadge label={(requestResult.success ? 'Success' : 'Error') + ' State'} tone={requestResult.success ? 'emerald' : 'rose'} /> : null}
+        >
+          <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <ResponseViewer result={requestResult} loading={requestLoading} activeTab={responseTab} onTabChange={onResponseTabChange} />
+            <RequestSnapshot result={requestResult} />
+          </div>
+        </PanelContainer>
+      );
+
+      const SchemaDockPanel = ({
+        schemaForm,
+        onChange,
+        onSubmit,
+        onLoadExample,
+        onClear,
+        loading,
+        errorMessage,
+        result,
+        onOpenPreview,
+      }) => (
+        <div className="rounded-[24px] border border-line bg-[#0b1322] p-4 text-white shadow-[0_24px_60px_rgba(6,12,24,0.35)]">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200/70">Schema Dock</p>
+              <h3 className="mt-2 font-display text-2xl font-extrabold tracking-[-0.03em] text-white">Generator</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Compact schema generation lives in the right panel now.
+              </p>
+            </div>
+            <StatusBadge label="Docked" tone="amber" />
+          </div>
+
+          <form onSubmit={onSubmit} className="grid gap-3">
+            <InputField label="Prompt" labelClassName="text-slate-200">
+              <textarea
+                className={classNames(
+                  'w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10',
+                  'min-h-[140px] resize-none'
+                )}
+                placeholder="Describe the product and let BRMH generate SQL and NoSQL structures."
+                value={schemaForm.prompt}
+                onChange={(event) => onChange('prompt', event.target.value)}
+                required
+              />
+            </InputField>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <InputField label="Provider" labelClassName="text-slate-200">
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
+                  type="text"
+                  placeholder="anthropic"
+                  value={schemaForm.provider}
+                  onChange={(event) => onChange('provider', event.target.value)}
+                />
+              </InputField>
+              <InputField label="Model" labelClassName="text-slate-200">
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10"
+                  type="text"
+                  placeholder="claude-sonnet-4-20250514"
+                  value={schemaForm.model}
+                  onChange={(event) => onChange('model', event.target.value)}
+                />
+              </InputField>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <ToolbarButton type="submit" tone="primary" disabled={loading} className="bg-cyan-400 text-slate-950 hover:bg-cyan-300">
+                {loading ? 'Generating...' : 'Generate'}
+              </ToolbarButton>
+              <ToolbarButton type="button" tone="secondary" onClick={onLoadExample} disabled={loading} className="border-white/15 bg-white/5 text-white hover:border-cyan-300/40 hover:text-cyan-200">
+                Example
+              </ToolbarButton>
+              <ToolbarButton type="button" tone="secondary" onClick={onOpenPreview} disabled={!result || loading} className="border-white/15 bg-white/5 text-white hover:border-fuchsia-300/40 hover:text-fuchsia-200">
+                Preview Schema
+              </ToolbarButton>
+              <ToolbarButton type="button" tone="ghost" onClick={onClear} className="bg-white/6 text-slate-300 hover:text-white">
+                Clear
+              </ToolbarButton>
+            </div>
+
+            {errorMessage ? (
+              <div className="rounded-[20px] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+                {errorMessage}
+              </div>
+            ) : null}
+          </form>
+
+          <div className="mt-4 rounded-[22px] border border-white/10 bg-[#08111f]">
+            <div className="border-b border-white/10 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200/70">Schema Summary</p>
+                  <p className="mt-1 text-sm text-slate-400">Scrollable architecture summary before opening the visual editor.</p>
+                </div>
+                {result ? <StatusBadge label="Ready" tone="emerald" /> : null}
+              </div>
+            </div>
+            <div className="app-scrollbar h-[280px] overflow-y-auto px-4 py-4">
+              {loading ? (
+                <LoadingSkeleton lines={6} />
+              ) : !result ? (
+                <p className="text-sm leading-6 text-slate-400">Generate a schema first, then open the visual schema editor in a new page.</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Provider</p>
+                      <p className="mt-2 text-sm font-semibold text-white">{result.meta?.provider || 'default'}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Duration</p>
+                      <p className="mt-2 text-sm font-semibold text-white">{String(result.meta?.durationMs || 0)} ms</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Text Preview</p>
+                    <CodeBlock value={result.preview || '(empty)'} />
+                  </div>
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Architectures</p>
+                    <div className="space-y-2">
+                      {(result.schema?.architectures || []).map((architecture, index) => (
+                        <div key={index} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-white">
+                              {architecture.database_type === 'sql' ? 'SQL' : 'NoSQL'} · {architecture.database_engine || 'engine'}
+                            </p>
+                            <span className="text-xs text-slate-400">
+                              {architecture.database_type === 'sql'
+                                ? String(architecture.tables?.length || 0) + ' tables'
+                                : String(architecture.collections?.length || 0) + ' collections'}
+                            </span>
                           </div>
-                        `
-                      )
-                      .join('')
-                  : `
-                    <div class="diagram-card">
-                      <h4>No explicit relationship map</h4>
-                      <p>The returned SQL architecture does not include foreign keys.</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-400">{architecture.use_case || 'No summary available.'}</p>
+                        </div>
+                      ))}
                     </div>
-                  `
-              }
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          <div class="subsection">
-            <h4 class="subsection-title">Table Diagram</h4>
-            <div class="diagram-grid">
-              ${(architecture.tables || [])
-                .map(
-                  (table) => `
-                    <div class="diagram-card">
-                      <h4>${escapeHtml(table.name)}</h4>
-                      <p>${escapeHtml(table.description || 'Core SQL table.')}</p>
-                      <div class="field-list">
-                        ${table.columns
-                          .map(
-                            (column) => `
-                              <div class="field-item">
-                                <div class="field-main">
-                                  <span class="field-name">${escapeHtml(column.name)}</span>
-                                  ${renderFieldPills(column, true)}
-                                </div>
-                              </div>
-                            `
-                          )
-                          .join('')}
-                      </div>
-                    </div>
-                  `
-                )
-                .join('')}
-            </div>
-          </div>
-        `;
-      };
+        </div>
+      );
 
-      const renderNoSqlDiagram = (architecture) => {
-        const collections = architecture.collections || [];
-        const links = inferNoSqlLinks(collections);
-
-        return `
-          <div class="subsection">
-            <h4 class="subsection-title">Reference Map</h4>
-            <div class="relation-grid">
-              ${
-                links.length
-                  ? links
-                      .map(
-                        (link) => `
-                          <div class="diagram-card">
-                            <h4>${escapeHtml(link.from)}.${escapeHtml(link.field)}</h4>
-                            <p>suggests a reference to <code>${escapeHtml(link.to)}</code></p>
-                          </div>
-                        `
-                      )
-                      .join('')
-                  : `
-                    <div class="diagram-card">
-                      <h4>Embedded-first structure</h4>
-                      <p>No obvious collection references were inferred from the field names.</p>
-                    </div>
-                  `
-              }
-            </div>
-          </div>
-          <div class="subsection">
-            <h4 class="subsection-title">Collection Diagram</h4>
-            <div class="diagram-grid">
-              ${collections
-                .map(
-                  (collection) => `
-                    <div class="diagram-card">
-                      <h4>${escapeHtml(collection.name)}</h4>
-                      <p>${escapeHtml(collection.description || 'Core NoSQL collection.')}</p>
-                      <div class="field-list">
-                        ${collection.document_shape
-                          .map(
-                            (field) => `
-                              <div class="field-item">
-                                <div class="field-main">
-                                  <span class="field-name">${escapeHtml(field.name)}</span>
-                                  ${renderFieldPills(field, false)}
-                                </div>
-                              </div>
-                            `
-                          )
-                          .join('')}
-                      </div>
-                    </div>
-                  `
-                )
-                .join('')}
-            </div>
-          </div>
-        `;
-      };
-
-      const openDiagram = (type) => {
-        if (!lastSchemaResult?.schema?.architectures?.length) {
-          return;
-        }
-
-        const architecture = lastSchemaResult.schema.architectures.find(
-          (item) => item.database_type === type
-        );
-
-        if (!architecture) {
-          return;
-        }
-
-        diagramTitle.textContent =
-          type === 'sql' ? 'SQL Schema Diagram' : 'NoSQL Schema Diagram';
-        diagramSubtitle.textContent = architecture.use_case || 'Visual structure for this architecture.';
-        diagramContent.innerHTML =
-          type === 'sql' ? renderSqlDiagram(architecture) : renderNoSqlDiagram(architecture);
-        diagramModal.classList.add('open');
-        diagramModal.setAttribute('aria-hidden', 'false');
-      };
-
-      const closeDiagram = () => {
-        diagramModal.classList.remove('open');
-        diagramModal.setAttribute('aria-hidden', 'true');
-      };
-
-      const renderSchemaResult = (result) => {
-        lastSchemaResult = result;
-
-        const architectures = result.schema?.architectures || [];
+      const SchemaComparisonPanel = ({ result, loading, errorMessage }) => {
+        const architectures = result?.schema?.architectures || [];
         const sqlArchitecture = architectures.find((item) => item.database_type === 'sql');
         const noSqlArchitecture = architectures.find((item) => item.database_type === 'nosql');
 
-        schemaOutput.className = '';
-        schemaOutput.innerHTML = `
-          <div class="status-row">
-            <div class="meta-card">
-              <strong>State</strong>
-              <span><span class="badge success">Ready</span></span>
-            </div>
-            <div class="meta-card">
-              <strong>Provider</strong>
-              <span>${escapeHtml(result.meta?.provider || 'default')}</span>
-            </div>
-            <div class="meta-card">
-              <strong>Model</strong>
-              <span>${escapeHtml(result.meta?.model || 'default')}</span>
-            </div>
-            <div class="meta-card">
-              <strong>Duration</strong>
-              <span>${escapeHtml(result.meta?.durationMs ?? 'N/A')} ms</span>
-            </div>
-          </div>
+        return (
+          <PanelContainer
+            eyebrow="Architecture Review"
+            title="Schema Comparison"
+            description="SQL and NoSQL outputs sit side by side in fixed-height columns with their own internal scrolling, keeping the dashboard itself locked in place."
+            actions={<StatusBadge label="Split View Ready" tone="blue" />}
+          >
+            {loading ? (
+              <div className="grid h-full min-h-0 gap-4 xl:grid-cols-2">
+                <ScrollableSection title="SQL" className="h-full">
+                  <LoadingSkeleton lines={7} />
+                </ScrollableSection>
+                <ScrollableSection title="NoSQL" className="h-full">
+                  <LoadingSkeleton lines={7} />
+                </ScrollableSection>
+              </div>
+            ) : errorMessage ? (
+              <AlertBox title="Comparison unavailable" copy={errorMessage} />
+            ) : !result ? (
+              <EmptyState title="Generate a schema to compare architectures" copy="This panel is reserved for side-by-side SQL and NoSQL output with independent scroll containers." />
+            ) : (
+              <div className="grid h-full min-h-0 gap-4 xl:grid-cols-2">
+                {sqlArchitecture ? (
+                  <ArchitectureCard architecture={sqlArchitecture} />
+                ) : (
+                  <ScrollableSection title="SQL Architecture" className="h-full">
+                    <EmptyState title="No SQL architecture returned" copy="The generator did not return a relational model for this prompt." />
+                  </ScrollableSection>
+                )}
 
-          <div class="subsection">
-            <h3 class="subsection-title">Side-by-Side Architectures</h3>
-            <div class="architecture-grid">
-              ${
-                sqlArchitecture
-                  ? renderSqlArchitectureCard(sqlArchitecture)
-                  : `
-                    <article class="architecture-card">
-                      <h3>Relational Architecture</h3>
-                      <p>No SQL architecture was returned.</p>
-                    </article>
-                  `
-              }
-              ${
-                noSqlArchitecture
-                  ? renderNoSqlArchitectureCard(noSqlArchitecture)
-                  : `
-                    <article class="architecture-card">
-                      <h3>Document Architecture</h3>
-                      <p>No NoSQL architecture was returned.</p>
-                    </article>
-                  `
-              }
-            </div>
-          </div>
-
-          <div class="subsection">
-            <h3 class="subsection-title">Preview</h3>
-            <pre>${escapeHtml(result.preview || '(empty)')}</pre>
-          </div>
-
-          <div class="subsection">
-            <h3 class="subsection-title">Generated SQL</h3>
-            <pre>${escapeHtml(result.sql || '(not provided)')}</pre>
-          </div>
-
-          <div class="subsection">
-            <h3 class="subsection-title">Raw JSON</h3>
-            <pre>${escapeHtml(formatJson(result))}</pre>
-          </div>
-        `;
-
-        schemaOutput.querySelectorAll('[data-diagram]').forEach((button) => {
-          button.addEventListener('click', () => openDiagram(button.dataset.diagram));
-        });
+                {noSqlArchitecture ? (
+                  <ArchitectureCard architecture={noSqlArchitecture} />
+                ) : (
+                  <ScrollableSection title="NoSQL Architecture" className="h-full">
+                    <EmptyState title="No NoSQL architecture returned" copy="The generator did not return a document model for this prompt." />
+                  </ScrollableSection>
+                )}
+              </div>
+            )}
+          </PanelContainer>
+        );
       };
 
-      const renderSchemaError = (message, payload = null) => {
-        lastSchemaResult = null;
-        schemaOutput.className = '';
-        schemaOutput.innerHTML = `
-          <div class="status-row">
-            <div class="meta-card">
-              <strong>State</strong>
-              <span><span class="badge error">Error</span></span>
-            </div>
-            <div class="meta-card">
-              <strong>Message</strong>
-              <span>${escapeHtml(message)}</span>
-            </div>
-          </div>
-          ${
-            payload
-              ? `
-                <div class="subsection">
-                  <h3 class="subsection-title">Raw Error</h3>
-                  <pre>${escapeHtml(formatJson(payload))}</pre>
+      const SettingsPanel = () => (
+        <PanelContainer
+          eyebrow="Future Surface"
+          title="Settings"
+          description="This placeholder keeps a stable slot for provider defaults, saved environments, plugin management, and workspace preferences."
+          actions={<StatusBadge label="Extensible Shell" tone="slate" />}
+        >
+          <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <ScrollableSection title="Workspace Preferences" description="A structured home for future settings and plugin controls." className="h-full">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-[24px] border border-line bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate">Layout</p>
+                  <h3 className="mt-2 font-display text-xl font-extrabold tracking-[-0.03em] text-ink">Split View Ready</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate">
+                    The shell already supports fixed-height panels, independent scroll regions, and a future multi-panel workspace.
+                  </p>
                 </div>
-              `
-              : ''
-          }
-        `;
+                <div className="rounded-[24px] border border-line bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate">Plugin Architecture</p>
+                  <h3 className="mt-2 font-display text-xl font-extrabold tracking-[-0.03em] text-ink">Tool Registry Pattern</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate">
+                    Sidebar items and main panels are driven by a registry, so new tools can be added without breaking the shell layout.
+                  </p>
+                </div>
+              </div>
+            </ScrollableSection>
+
+            <ScrollableSection title="Planned Settings Surface" className="h-full">
+              <div className="space-y-3">
+                {['Provider defaults', 'Saved request environments', 'Prompt presets', 'Plugin toggles', 'Keyboard shortcuts'].map((item) => (
+                  <div key={item} className="rounded-2xl border border-line bg-white p-4">
+                    <p className="font-semibold text-ink">{item}</p>
+                    <p className="mt-1 text-sm text-slate">Reserved for future workspace configuration.</p>
+                  </div>
+                ))}
+              </div>
+            </ScrollableSection>
+          </div>
+        </PanelContainer>
+      );
+
+      const InspectorPanel = ({
+        activePanel,
+        requestResult,
+        requestLoading,
+        schemaResult,
+        schemaLoading,
+        onOpenPanel,
+        schemaForm,
+        onSchemaChange,
+        onSchemaSubmit,
+        onSchemaExample,
+        onSchemaClear,
+        schemaError,
+        onOpenSchemaPreview,
+      }) => {
+        const activeItem = NAV_ITEMS.find((item) => item.id === activePanel);
+
+        return (
+          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[30px] border border-white/80 bg-white/78 shadow-shell glass">
+            <div className="sticky top-0 z-10 border-b border-line/80 bg-white/88 px-5 py-4 backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate">Right Panel</p>
+              <h2 className="mt-2 font-display text-2xl font-extrabold tracking-[-0.04em] text-ink">Schema Dock</h2>
+              <p className="mt-2 text-sm leading-6 text-slate">
+                Generator, preview toggle, and scrollable schema response now live in the right dock.
+              </p>
+            </div>
+
+            <div className="app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+              <div className="rounded-[24px] border border-line bg-panelStrong/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate">Active Tool</p>
+                <h3 className="mt-2 font-display text-xl font-extrabold tracking-[-0.03em] text-ink">{activeItem?.label}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate">{activeItem?.helper}</p>
+              </div>
+
+              <div className="rounded-[24px] border border-line bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate">Quick Switch</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {['api', 'response', 'schema', 'comparison'].map((panelId) => (
+                    <ToolbarButton key={panelId} type="button" tone="secondary" onClick={() => onOpenPanel(panelId)}>
+                      {NAV_ITEMS.find((item) => item.id === panelId)?.label}
+                    </ToolbarButton>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <KeyMetric
+                  label="API State"
+                  value={requestLoading ? 'Loading' : requestResult ? (requestResult.success ? 'Ready' : 'Error') : 'Idle'}
+                  tone={requestLoading ? 'amber' : requestResult ? (requestResult.success ? 'success' : 'rose') : 'slate'}
+                />
+                <KeyMetric
+                  label="Schema State"
+                  value={schemaLoading ? 'Generating' : schemaResult ? 'Ready' : 'Idle'}
+                  tone={schemaLoading ? 'amber' : schemaResult ? 'success' : 'slate'}
+                />
+              </div>
+
+              <SchemaDockPanel
+                schemaForm={schemaForm}
+                onChange={onSchemaChange}
+                onSubmit={onSchemaSubmit}
+                onLoadExample={onSchemaExample}
+                onClear={onSchemaClear}
+                loading={schemaLoading}
+                errorMessage={schemaError}
+                result={schemaResult}
+                onOpenPreview={onOpenSchemaPreview}
+              />
+
+              <div className="rounded-[24px] border border-line bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate">Latest Response Summary</p>
+                {requestResult ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate">Status</span>
+                      <StatusBadge
+                        label={String(requestResult.success ? requestResult.response?.status : requestResult.error?.status || 'N/A')}
+                        tone={getStatusTone(requestResult.success ? requestResult.response?.status : requestResult.error?.status)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate">Duration</span>
+                      <span className="text-sm font-semibold text-ink">
+                        {String(requestResult.success ? requestResult.response?.meta?.durationMs : requestResult.error?.meta?.durationMs || 0)} ms
+                      </span>
+                    </div>
+                    <CodeBlock value={(requestResult.success ? requestResult.response?.preview : requestResult.error?.preview) || '(empty)'} />
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm leading-6 text-slate">No request has been sent yet.</p>
+                )}
+              </div>
+            </div>
+          </section>
+        );
       };
 
-      requestForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        sendButton.disabled = true;
-        sendButton.textContent = 'Sending...';
+      const App = () => {
+        const [activePanel, setActivePanel] = useState('schema');
+        const [inspectorOpen, setInspectorOpen] = useState(true);
+        const [apiForm, setApiForm] = useState(initialApiForm);
+        const [schemaForm, setSchemaForm] = useState(initialSchemaForm);
+        const [requestResult, setRequestResult] = useState(null);
+        const [schemaResult, setSchemaResult] = useState(null);
+        const [requestLoading, setRequestLoading] = useState(false);
+        const [schemaLoading, setSchemaLoading] = useState(false);
+        const [requestError, setRequestError] = useState('');
+        const [schemaError, setSchemaError] = useState('');
+        const [responseTab, setResponseTab] = useState('json');
 
-        try {
-          const payload = buildRequestPayload();
-          const response = await fetch('/api/requests/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const result = await response.json();
-          renderRequestResult(result, !result.success);
-        } catch (error) {
-          renderRequestResult({ error: { message: error.message } }, true);
-        } finally {
-          sendButton.disabled = false;
-          sendButton.textContent = 'Send Request';
-        }
-      });
+        const updateApiField = (key, value) => {
+          setApiForm((current) => ({ ...current, [key]: value }));
+        };
 
-      schemaForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        generateButton.disabled = true;
-        generateButton.textContent = 'Generating...';
+        const updateSchemaField = (key, value) => {
+          setSchemaForm((current) => ({ ...current, [key]: value }));
+        };
 
-        try {
-          const payload = buildSchemaPayload();
-          const response = await fetch('/api/schema/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const result = await response.json();
+        const clearRequest = () => {
+          setApiForm(initialApiForm);
+          setRequestResult(null);
+          setRequestError('');
+        };
 
-          if (!response.ok || !result.success) {
-            renderSchemaError(result.error?.message || 'Schema generation failed.', result);
+        const clearSchema = () => {
+          setSchemaForm(initialSchemaForm);
+          setSchemaResult(null);
+          setSchemaError('');
+        };
+
+        const openSchemaPreview = () => {
+          if (!schemaResult) {
             return;
           }
 
-          renderSchemaResult(result);
-        } catch (error) {
-          renderSchemaError(error.message || 'Schema generation failed.');
-        } finally {
-          generateButton.disabled = false;
-          generateButton.textContent = 'Generate Both';
-        }
-      });
+          const stored = saveSchemaPreviewPayload({
+            schemaResult,
+            schemaForm,
+            savedAt: new Date().toISOString(),
+          });
 
-      clearRequestButton.addEventListener('click', () => {
-        requestForm.reset();
-        requestForm.method.value = 'GET';
-        requestForm.timeout.value = '15000';
-        requestForm.headers.value = '{}';
-        requestForm.params.value = '{}';
-        requestForm.body.value = '{}';
-        requestOutput.className = 'empty-state';
-        requestOutput.textContent =
-          'Send a request to inspect status, metadata, preview text, and raw JSON.';
-      });
+          if (!stored) {
+            setSchemaError('Unable to open the visual schema preview because local storage is unavailable.');
+            return;
+          }
 
-      shopifyExampleButton.addEventListener('click', () => {
-        requestForm.method.value = SHOPIFY_REQUEST_EXAMPLE.method;
-        requestForm.url.value = SHOPIFY_REQUEST_EXAMPLE.url;
-        requestForm.timeout.value = String(SHOPIFY_REQUEST_EXAMPLE.timeout);
-        requestForm.headers.value = formatJson(SHOPIFY_REQUEST_EXAMPLE.headers);
-        requestForm.params.value = formatJson(SHOPIFY_REQUEST_EXAMPLE.params);
-        requestForm.body.value = formatJson(SHOPIFY_REQUEST_EXAMPLE.body);
-      });
+          window.open('/studio/', '_blank', 'noopener,noreferrer');
+        };
 
-      clearSchemaButton.addEventListener('click', () => {
-        schemaForm.reset();
-        schemaForm.provider.value = '';
-        schemaForm.model.value = '';
-        schemaForm.sourceData.value = '';
-        lastSchemaResult = null;
-        schemaOutput.className = 'empty-state';
-        schemaOutput.textContent =
-          'Generate a schema to compare the two architectures side by side.';
-      });
+        const loadShopifyExample = () => {
+          setApiForm({
+            method: SHOPIFY_REQUEST_EXAMPLE.method,
+            url: SHOPIFY_REQUEST_EXAMPLE.url,
+            timeout: String(SHOPIFY_REQUEST_EXAMPLE.timeout),
+            headers: formatJson(SHOPIFY_REQUEST_EXAMPLE.headers),
+            params: formatJson(SHOPIFY_REQUEST_EXAMPLE.params),
+            body: formatJson(SHOPIFY_REQUEST_EXAMPLE.body),
+          });
+          setRequestError('');
+        };
 
-      schemaExampleButton.addEventListener('click', () => {
-        schemaForm.prompt.value = EXAMPLE_PROMPT;
-        schemaForm.sourceData.value = formatJson(EXAMPLE_SOURCE);
-      });
+        const loadSchemaExample = async () => {
+          setSchemaLoading(true);
+          setSchemaError('');
 
-      closeDiagramButton.addEventListener('click', closeDiagram);
+          try {
+            const response = await fetch('/api/schema/example');
+            const result = await response.json();
 
-      diagramModal.addEventListener('click', (event) => {
-        if (event.target === diagramModal) {
-          closeDiagram();
-        }
-      });
+            if (!response.ok || !result.success || !result.example) {
+              throw new Error(result.error?.message || 'Unable to load a schema example.');
+            }
+
+            setSchemaForm({
+              prompt: result.example.prompt || '',
+              provider: result.example.provider || '',
+              model: result.example.model || '',
+              sourceData: result.example.sourceData ? formatJson(result.example.sourceData) : '',
+            });
+            setActivePanel('schema');
+          } catch (error) {
+            setSchemaError(error.message || 'Unable to load a schema example.');
+          } finally {
+            setSchemaLoading(false);
+          }
+        };
+
+        const submitRequest = async (event) => {
+          event.preventDefault();
+          setRequestLoading(true);
+          setRequestError('');
+
+          try {
+            const payload = {
+              method: apiForm.method,
+              url: apiForm.url.trim(),
+              timeout: Number(apiForm.timeout) || 15000,
+              headers: safeParseJson(apiForm.headers, 'Headers JSON'),
+              params: safeParseJson(apiForm.params, 'Query Params JSON'),
+              body: safeParseJson(apiForm.body, 'Body JSON'),
+            };
+
+            const response = await fetch('/api/requests/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+
+            setRequestResult(result);
+            setResponseTab(result.success ? 'json' : 'preview');
+            setActivePanel('response');
+          } catch (error) {
+            setRequestError(error.message || 'Unable to send the request.');
+            setRequestResult(null);
+          } finally {
+            setRequestLoading(false);
+          }
+        };
+
+        const submitSchema = async (event) => {
+          event.preventDefault();
+          setSchemaLoading(true);
+          setSchemaError('');
+
+          try {
+            const payload = {
+              prompt: schemaForm.prompt.trim(),
+              provider: schemaForm.provider.trim() || undefined,
+              model: schemaForm.model.trim() || undefined,
+              sourceData: schemaForm.sourceData.trim()
+                ? safeParseJson(schemaForm.sourceData, 'Source JSON')
+                : undefined,
+            };
+
+            const response = await fetch('/api/schema/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+              throw new Error(result.error?.message || 'Schema generation failed.');
+            }
+
+            setSchemaResult(result);
+            setActivePanel('schema');
+          } catch (error) {
+            setSchemaError(error.message || 'Schema generation failed.');
+          } finally {
+            setSchemaLoading(false);
+          }
+        };
+
+        const panelMap = useMemo(
+          () => ({
+            api: (
+              <APIPlaygroundPanel
+                formState={apiForm}
+                onChange={updateApiField}
+                onSubmit={submitRequest}
+                onLoadExample={loadShopifyExample}
+                onClear={clearRequest}
+                loading={requestLoading}
+                localError={requestError}
+                requestResult={requestResult}
+                requestLoading={requestLoading}
+                responseTab={responseTab}
+                onResponseTabChange={setResponseTab}
+              />
+            ),
+            schema: (
+              <BrandCanvasPanel
+                title="BRMH"
+                subtitle="The schema generator is docked on the right, leaving the center canvas open for brand presence and future interactive previews."
+              />
+            ),
+            response: (
+              <ResponsePanel
+                requestResult={requestResult}
+                requestLoading={requestLoading}
+                responseTab={responseTab}
+                onResponseTabChange={setResponseTab}
+              />
+            ),
+            comparison: <BrandCanvasPanel title="BRMH" subtitle="Schema review has been moved to the right dock preview so the central workspace stays visually clear for now." />,
+            settings: <SettingsPanel />,
+          }),
+          [
+            apiForm,
+            requestError,
+            requestLoading,
+            requestResult,
+            responseTab,
+            schemaError,
+            schemaForm,
+            schemaLoading,
+            schemaResult,
+          ]
+        );
+
+        return (
+          <div className="flex h-full overflow-hidden">
+            <Sidebar activePanel={activePanel} onSelect={setActivePanel} />
+
+            <main className="flex min-w-0 flex-1 flex-col gap-4 p-4 xl:p-5">
+              <MobileRail activePanel={activePanel} onSelect={setActivePanel} />
+
+              <div className={classNames('grid min-h-0 flex-1 gap-4', inspectorOpen ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'grid-cols-1')}>
+                <div className="min-h-0 animate-panel-in">{panelMap[activePanel]}</div>
+
+                {inspectorOpen ? (
+                  <div className="hidden min-h-0 xl:block">
+                    <InspectorPanel
+                      activePanel={activePanel}
+                      requestResult={requestResult}
+                      requestLoading={requestLoading}
+                      schemaResult={schemaResult}
+                      schemaLoading={schemaLoading}
+                      onOpenPanel={setActivePanel}
+                      schemaForm={schemaForm}
+                      onSchemaChange={updateSchemaField}
+                      onSchemaSubmit={submitSchema}
+                      onSchemaExample={loadSchemaExample}
+                      onSchemaClear={clearSchema}
+                      schemaError={schemaError}
+                      onOpenSchemaPreview={openSchemaPreview}
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setInspectorOpen((current) => !current)}
+                className="hidden self-end rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-sm font-semibold text-ink shadow-soft xl:inline-flex"
+              >
+                {inspectorOpen ? 'Hide Insights Panel' : 'Show Insights Panel'}
+              </button>
+            </main>
+          </div>
+        );
+      };
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
   </body>
 </html>
