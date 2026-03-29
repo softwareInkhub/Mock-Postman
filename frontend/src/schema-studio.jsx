@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import dagre from 'dagre';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Background,
   Controls,
   Handle,
-  MiniMap,
   Panel,
   Position,
   ReactFlow,
@@ -18,53 +18,117 @@ import {
   ArrowRightLeft,
   Binary,
   Cable,
+  Check,
+  ChevronDown,
+  Clipboard,
   Database,
+  Download,
+  FileJson2,
   LayoutGrid,
   PencilLine,
   Sparkles,
   WandSparkles,
   X,
+  Zap,
 } from 'lucide-react';
 
+// ---------------------------------------------------------------------------
+// Lightweight JSON syntax highlighter (no external deps)
+// ---------------------------------------------------------------------------
+function OpenApiHighlight({ doc }) {
+  const raw = JSON.stringify(doc, null, 2);
+
+  // Split into tokens: strings, numbers, booleans, nulls, punctuation
+  const tokens = raw.split(
+    /("(?:[^"\\]|\\.)*"(?:\s*:)?|true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}[\],:])/
+  );
+
+  return tokens.map((token, i) => {
+    if (!token) return null;
+
+    // Key (string followed by colon)
+    if (/^".*":$/.test(token)) {
+      const key = token.slice(0, -1); // remove trailing colon
+      return (
+        <React.Fragment key={i}>
+          <span className="oa-key">{key}</span>
+          <span className="oa-punct">:</span>
+        </React.Fragment>
+      );
+    }
+    // String value
+    if (/^"/.test(token)) return <span key={i} className="oa-string">{token}</span>;
+    // Boolean
+    if (token === 'true' || token === 'false') return <span key={i} className="oa-bool">{token}</span>;
+    // Null
+    if (token === 'null') return <span key={i} className="oa-null">{token}</span>;
+    // Number
+    if (/^-?\d/.test(token)) return <span key={i} className="oa-number">{token}</span>;
+    // Punctuation / whitespace
+    return <span key={i} className="oa-punct">{token}</span>;
+  });
+}
+
 const STORAGE_KEY = 'brmh-schema-preview';
-const NODE_WIDTH = 320;
-const NODE_HEIGHT = 220;
+const NODE_WIDTH = 300;
+const NODE_HEIGHT_COLLAPSED = 76;
 
 const nodeTypes = {
   schema: SchemaNode,
 };
 
 function SchemaNode({ data, selected }) {
+  const [expanded, setExpanded] = useState(false);
+  const isSql = data.variant === 'sql';
+
   return (
-    <div className={`schema-node ${selected ? 'schema-node--selected' : ''} ${data.variant === 'sql' ? 'schema-node--sql' : 'schema-node--nosql'}`}>
+    <div className={[
+      'schema-node',
+      selected ? 'schema-node--selected' : '',
+      isSql ? 'schema-node--sql' : 'schema-node--nosql',
+      expanded ? 'schema-node--expanded' : '',
+    ].join(' ')}>
       <Handle type="target" position={Position.Left} className="node-handle node-handle--target" />
       <Handle type="source" position={Position.Right} className="node-handle node-handle--source" />
 
-      <div className="schema-node__top">
-        <div>
-          <p className="schema-node__eyebrow">{data.variant === 'sql' ? 'Table' : 'Collection'}</p>
+      {/* Header — always visible, click to expand/collapse */}
+      <div className="schema-node__header" onClick={() => setExpanded((v) => !v)}>
+        <div className="schema-node__header-left">
+          <p className="schema-node__eyebrow">{isSql ? 'TABLE' : 'COLLECTION'}</p>
           <h3 className="schema-node__title">{data.label}</h3>
         </div>
-        <span className="schema-node__count">{data.fields.length} fields</span>
+        <div className="schema-node__header-right">
+          <span className="schema-node__count">{data.fields.length}</span>
+          <ChevronDown
+            size={13}
+            className={`schema-node__chevron${expanded ? ' schema-node__chevron--open' : ''}`}
+          />
+        </div>
       </div>
 
-      <p className="schema-node__description">{data.description}</p>
+      {/* Collapsed: show brief description only */}
+      {!expanded && (
+        <p className="schema-node__description">{data.description}</p>
+      )}
 
-      <div className="schema-node__fields">
-        {data.fields.map((field) => (
-          <div key={field.name} className="schema-node__field">
-            <div>
-              <strong>{field.name}</strong>
-              <span>{field.type || 'string'}</span>
+      {/* Expanded: full field list */}
+      {expanded && (
+        <div className="schema-node__fields">
+          {data.fields.map((field) => (
+            <div key={field.name} className="schema-node__field">
+              <div className="schema-node__field-left">
+                <strong className="schema-node__field-name">{field.name}</strong>
+                <span className="schema-node__field-type">{field.type || 'string'}</span>
+              </div>
+              <div className="schema-node__badges">
+                {field.primary_key && <span className="badge badge--pk">PK</span>}
+                {field.foreign_key && <span className="badge badge--fk">FK</span>}
+                {field.required && !field.primary_key && <span className="badge badge--req">REQ</span>}
+              </div>
             </div>
-            <div className="schema-node__badges">
-              {field.primary_key ? <span>PK</span> : null}
-              {field.required ? <span>REQ</span> : null}
-              {field.foreign_key ? <span>FK</span> : null}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -91,7 +155,7 @@ const toFieldList = (variant, item) =>
     name: field.name,
     type: field.type || (variant === 'sql' ? 'column' : 'attribute'),
     required: Boolean(field.required),
-    primary_key: Boolean(field.primary_key),
+    primary_key: Boolean(field.primary_key || field.primary),
     foreign_key: Boolean(field.foreign_key),
   }));
 
@@ -121,10 +185,10 @@ const buildGraph = (payload, mode) => {
   const items = mode === 'sql' ? architecture.tables || [] : architecture.collections || [];
   const dag = new dagre.graphlib.Graph();
   dag.setDefaultEdgeLabel(() => ({}));
-  dag.setGraph({ rankdir: 'LR', nodesep: 54, ranksep: 120, marginx: 44, marginy: 44 });
+  dag.setGraph({ rankdir: 'LR', nodesep: 36, ranksep: 100, marginx: 40, marginy: 40 });
 
   const nodes = items.map((item) => {
-    dag.setNode(item.name, { width: NODE_WIDTH, height: NODE_HEIGHT });
+    dag.setNode(item.name, { width: NODE_WIDTH, height: NODE_HEIGHT_COLLAPSED });
     return {
       id: item.name,
       type: 'schema',
@@ -161,7 +225,7 @@ const buildGraph = (payload, mode) => {
       ...node,
       position: {
         x: position.x - NODE_WIDTH / 2,
-        y: position.y - NODE_HEIGHT / 2,
+        y: position.y - NODE_HEIGHT_COLLAPSED / 2,
       },
     };
   });
@@ -212,9 +276,17 @@ function StudioCanvas() {
   const [payload, setPayload] = useState(readStoredPayload());
   const [mode, setMode] = useState('sql');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [augmentDrawerMode, setAugmentDrawerMode] = useState(null); // 'tables' | 'fields' | null
   const [editPrompt, setEditPrompt] = useState('');
+  const [augmentPrompt, setAugmentPrompt] = useState('');
   const [refineLoading, setRefineLoading] = useState(false);
+  const [augmentLoading, setAugmentLoading] = useState(false);
   const [error, setError] = useState('');
+  const [augmentError, setAugmentError] = useState('');
+  const [openApiDoc, setOpenApiDoc] = useState(null);   // null = closed, object = open
+  const [openApiLoading, setOpenApiLoading] = useState(false);
+  const [openApiError, setOpenApiError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const graph = useMemo(() => buildGraph(payload, mode), [payload, mode]);
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
@@ -232,7 +304,6 @@ function StudioCanvas() {
     }
   }, [mode, payload]);
 
-  const selectedNode = nodes[0] || null;
   const architectureCountLabel = mode === 'sql' ? 'Tables' : 'Collections';
 
   const onConnect = useCallback(
@@ -271,7 +342,11 @@ function StudioCanvas() {
   );
 
   const refineSchema = useCallback(async () => {
-    if (!payload?.schemaForm?.prompt || !editPrompt.trim()) {
+    if (!editPrompt.trim()) return;
+
+    const existingSchema = payload?.schemaResult?.schema;
+    if (!existingSchema) {
+      setError('No existing schema found. Generate a schema first.');
       return;
     }
 
@@ -279,37 +354,118 @@ function StudioCanvas() {
     setError('');
 
     try {
-      const response = await fetch('/api/schema/generate', {
+      const editResponse = await fetch('/api/schema/edit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `${payload.schemaForm.prompt}\n\nApply these requested schema changes while keeping the response visually coherent:\n${editPrompt}`,
-          provider: payload.schemaForm.provider || undefined,
-          model: payload.schemaForm.model || undefined,
-          sourceData: payload.schemaResult?.schema || undefined,
-        }),
+        body: JSON.stringify({ existingSchema, instruction: editPrompt }),
       });
-      const result = await response.json();
+      const editResult = await editResponse.json();
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.error?.message || 'Unable to refine schema.');
+      if (!editResponse.ok || !editResult.success) {
+        throw new Error(editResult.error?.message || 'Unable to apply changes with the deterministic schema editor. Try being more specific about the table or field change you want.');
       }
 
-      const nextPayload = {
-        ...payload,
-        schemaResult: result,
-      };
-
+      const nextPayload = { ...payload, schemaResult: editResult };
       setPayload(nextPayload);
       writeStoredPayload(nextPayload);
       setEditPrompt('');
       setDrawerOpen(false);
     } catch (requestError) {
-      setError(requestError.message || 'Unable to refine schema.');
+      setError(requestError.message || 'Unable to apply changes.');
     } finally {
       setRefineLoading(false);
     }
   }, [editPrompt, payload]);
+
+  const augmentSchema = useCallback(async () => {
+    if (!augmentPrompt.trim()) return;
+
+    const existingSchema = payload?.schemaResult?.schema;
+    if (!existingSchema) {
+      setAugmentError('No existing schema found. Generate a schema first.');
+      return;
+    }
+
+    setAugmentLoading(true);
+    setAugmentError('');
+
+    try {
+      const response = await fetch('/api/schema/augment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          existingSchema,
+          instruction: augmentPrompt,
+          mode: augmentDrawerMode,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error?.message || 'Unable to augment schema.');
+      }
+
+      const nextPayload = { ...payload, schemaResult: result };
+      setPayload(nextPayload);
+      writeStoredPayload(nextPayload);
+      setAugmentPrompt('');
+      setAugmentDrawerMode(null);
+    } catch (err) {
+      setAugmentError(err.message || 'Unable to augment schema.');
+    } finally {
+      setAugmentLoading(false);
+    }
+  }, [augmentPrompt, augmentDrawerMode, payload]);
+
+  const exportOpenApi = useCallback(async () => {
+    const schema = payload?.schemaResult?.schema;
+    if (!schema) return;
+    setOpenApiLoading(true);
+    setOpenApiError('');
+    try {
+      const response = await fetch('/api/schema/openapi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schema,
+          title: payload?.schemaForm?.prompt
+            ? `${payload.schemaForm.prompt} API`
+            : 'Generated API',
+          version: '1.0.0',
+          sourceArch: mode,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error?.message || 'Failed to generate OpenAPI spec.');
+      }
+      setOpenApiDoc(result.openapi);
+    } catch (err) {
+      setOpenApiError(err.message || 'Failed to generate OpenAPI spec.');
+    } finally {
+      setOpenApiLoading(false);
+    }
+  }, [payload, mode]);
+
+  const copyOpenApi = useCallback(() => {
+    if (!openApiDoc) return;
+    navigator.clipboard.writeText(JSON.stringify(openApiDoc, null, 2)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    });
+  }, [openApiDoc]);
+
+  const downloadOpenApi = useCallback(() => {
+    if (!openApiDoc) return;
+    const blob = new Blob([JSON.stringify(openApiDoc, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const slug = (openApiDoc.info?.title || 'openapi').toLowerCase().replace(/\s+/g, '-');
+    a.href = url;
+    a.download = `${slug}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [openApiDoc]);
 
   if (!payload?.schemaResult) {
     return (
@@ -328,20 +484,17 @@ function StudioCanvas() {
       <div className="studio-shell">
         <section className="studio-main">
           <header className="studio-header">
-            <div>
-              <p className="studio-kicker">Visual Schema Studio</p>
-              <h1>BRMH</h1>
-              <p className="studio-copy">
-                Premium schema canvas with Apple-inspired surfaces, graceful edge routing, drag-and-drop blocks, and cursor-driven wiring.
-              </p>
+            <div className="studio-header__brand">
+              <div className="studio-header__logo">
+                <Sparkles size={17} color="white" />
+              </div>
+              <div>
+                <div className="studio-header__wordmark">BRMH Schema Studio</div>
+                <div className="studio-header__sub">Visual · Deterministic · OpenAPI-ready</div>
+              </div>
             </div>
 
             <div className="studio-header__actions">
-              <button type="button" className="primary-pill primary-pill--header" onClick={() => setDrawerOpen(true)}>
-                <PencilLine size={16} />
-                Edit Schema
-              </button>
-
               <div className="mode-switch">
                 {['sql', 'nosql'].map((item) => (
                   <button
@@ -350,7 +503,7 @@ function StudioCanvas() {
                     className={item === mode ? 'mode-switch__button mode-switch__button--active' : 'mode-switch__button'}
                     onClick={() => setMode(item)}
                   >
-                    {item === 'sql' ? <Database size={16} /> : <Binary size={16} />}
+                    {item === 'sql' ? <Database size={14} /> : <Binary size={14} />}
                     {item.toUpperCase()}
                   </button>
                 ))}
@@ -372,14 +525,7 @@ function StudioCanvas() {
               onConnect={onConnect}
               proOptions={{ hideAttribution: true }}
             >
-              <Background color="rgba(110, 128, 152, 0.22)" gap={28} size={1.2} />
-              <MiniMap
-                pannable
-                zoomable
-                className="studio-minimap"
-                nodeStrokeColor={(node) => (node.data?.variant === 'sql' ? '#5c8dff' : '#ff9f43')}
-                nodeColor={() => 'rgba(255,255,255,0.92)'}
-              />
+              <Background color="rgba(99, 120, 160, 0.18)" gap={26} size={1} variant="dots" />
               <Controls className="studio-controls" />
               <Panel position="top-left" className="studio-panel">
                 <div className="studio-panel__metric">
@@ -421,16 +567,45 @@ function StudioCanvas() {
           </div>
 
           <div className="sidebar-card">
-            <div className="sidebar-card__row">
-              <div>
-                <p className="sidebar-card__eyebrow">Schema Refinement</p>
-                <p className="sidebar-card__text">Open a dedicated prompt panel to request structural changes and regenerate the schema.</p>
-              </div>
-              <button type="button" className="primary-pill" onClick={() => setDrawerOpen(true)}>
-                <PencilLine size={16} />
-                Edit
+            <p className="sidebar-card__eyebrow">Schema Actions</p>
+            <div className="sidebar-actions">
+              <button type="button" className="primary-pill sidebar-action-pill" onClick={() => setDrawerOpen(true)}>
+                <PencilLine size={15} />
+                Edit Schema
               </button>
+              <div className="sidebar-actions--row">
+                <button type="button" className="augment-pill augment-pill--tables" onClick={() => { setAugmentDrawerMode('tables'); setAugmentError(''); setAugmentPrompt(''); }}>
+                  <LayoutGrid size={15} />
+                  Add / Remove Tables
+                </button>
+                <button type="button" className="augment-pill augment-pill--fields" onClick={() => { setAugmentDrawerMode('fields'); setAugmentError(''); setAugmentPrompt(''); }}>
+                  <Cable size={15} />
+                  Add / Remove Fields
+                </button>
+              </div>
             </div>
+          </div>
+
+          {/* ── OpenAPI Export Card ─────────────────────── */}
+          <div className="sidebar-card sidebar-card--openapi">
+            <div className="openapi-card__top">
+              <div>
+                <p className="sidebar-card__eyebrow">Export</p>
+                <p className="openapi-card__title">OpenAPI 3.1</p>
+                <p className="openapi-card__sub">JSON Schema 2020-12 · CRUD paths · $ref components</p>
+              </div>
+              <FileJson2 size={28} className="openapi-card__icon" />
+            </div>
+            {openApiError ? <p className="openapi-card__error">{openApiError}</p> : null}
+            <button
+              type="button"
+              className="openapi-export-btn"
+              onClick={exportOpenApi}
+              disabled={openApiLoading}
+            >
+              <Zap size={15} />
+              {openApiLoading ? 'Generating…' : 'Generate OpenAPI Spec'}
+            </button>
           </div>
 
           <div className="sidebar-card">
@@ -458,10 +633,64 @@ function StudioCanvas() {
         </aside>
       </div>
 
-      <button type="button" className="floating-edit-pill" onClick={() => setDrawerOpen(true)}>
-        <PencilLine size={16} />
-        Edit Schema
-      </button>
+
+      <AnimatePresence>
+        {augmentDrawerMode ? (
+          <motion.div
+            className="refine-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="refine-drawer"
+              initial={{ x: 120, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 120, opacity: 0 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 220 }}
+            >
+              <div className="refine-drawer__head">
+                <div>
+                  <p className="studio-kicker">
+                    {augmentDrawerMode === 'tables' ? 'Add / Remove Tables' : 'Add / Remove Fields'}
+                  </p>
+                  <h2>{augmentDrawerMode === 'tables' ? 'What table changes do you need?' : 'What field changes do you need?'}</h2>
+                  <p>
+                    {augmentDrawerMode === 'tables'
+                      ? 'Describe the new tables or collections to append. The existing schema is preserved.'
+                      : 'Describe the fields or columns to add to existing tables. Specify which table if needed.'}
+                  </p>
+                </div>
+                <button type="button" className="icon-button" onClick={() => setAugmentDrawerMode(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <textarea
+                value={augmentPrompt}
+                onChange={(e) => setAugmentPrompt(e.target.value)}
+                placeholder={augmentDrawerMode === 'tables'
+                  ? 'e.g. Add a notifications table and a coupons table with expiry dates.'
+                  : 'e.g. Add a profile_picture_url field to users, and add a discount_pct column to products.'}
+                className="refine-drawer__textarea"
+              />
+              {augmentError ? <div className="refine-error">{augmentError}</div> : null}
+              <div className="refine-drawer__actions">
+                <button type="button" className="secondary-pill" onClick={() => setAugmentDrawerMode(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-pill"
+                  disabled={augmentLoading || !augmentPrompt.trim()}
+                  onClick={augmentSchema}
+                >
+                  {augmentLoading ? 'Updating...' : 'Apply Changes'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {drawerOpen ? (
@@ -482,7 +711,7 @@ function StudioCanvas() {
                 <div>
                   <p className="studio-kicker">Prompt Refinement</p>
                   <h2>Make The Schema Better</h2>
-                  <p>Describe the changes you want and regenerate the graph with a cleaner information architecture.</p>
+                  <p>Describe the schema changes in plain English. You can add, remove, rename, or combine multiple changes in one instruction.</p>
                 </div>
                 <button type="button" className="icon-button" onClick={() => setDrawerOpen(false)}>
                   <X size={18} />
@@ -492,7 +721,7 @@ function StudioCanvas() {
               <textarea
                 value={editPrompt}
                 onChange={(event) => setEditPrompt(event.target.value)}
-                placeholder="Add an invoices table linked to organizations, split comments into moderation events, and make the NoSQL graph optimized for feed reads."
+                placeholder="Rename users to customers, remove delivery_partners, add coupons table, and add coupon_code to orders."
                 className="refine-drawer__textarea"
               />
 
@@ -505,6 +734,75 @@ function StudioCanvas() {
                 <button type="button" className="primary-pill" disabled={refineLoading || !editPrompt.trim()} onClick={refineSchema}>
                   {refineLoading ? 'Regenerating...' : 'Apply Changes'}
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {/* ── OpenAPI Viewer Modal ──────────────────────────── */}
+      <AnimatePresence>
+        {openApiDoc ? (
+          <motion.div
+            className="openapi-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+          >
+            <motion.div
+              className="openapi-modal"
+              initial={{ y: 60, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 60, opacity: 0, scale: 0.97 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 240 }}
+            >
+              {/* Modal header */}
+              <div className="openapi-modal__header">
+                <div className="openapi-modal__header-left">
+                  <span className="openapi-modal__badge">
+                    <FileJson2 size={13} />
+                    OpenAPI 3.1.0
+                  </span>
+                  <h2 className="openapi-modal__title">{openApiDoc.info?.title}</h2>
+                  <p className="openapi-modal__meta">
+                    {Object.keys(openApiDoc.components?.schemas || {}).length} schemas &middot;&nbsp;
+                    {Object.keys(openApiDoc.paths || {}).length} paths &middot;&nbsp;
+                    JSON Schema 2020-12
+                  </p>
+                </div>
+                <div className="openapi-modal__header-right">
+                  <button
+                    type="button"
+                    className="openapi-action-btn openapi-action-btn--copy"
+                    onClick={copyOpenApi}
+                  >
+                    {copied ? <Check size={14} /> : <Clipboard size={14} />}
+                    {copied ? 'Copied!' : 'Copy JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    className="openapi-action-btn openapi-action-btn--download"
+                    onClick={downloadOpenApi}
+                  >
+                    <Download size={14} />
+                    Download .json
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => { setOpenApiDoc(null); setOpenApiError(''); }}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable JSON body */}
+              <div className="openapi-modal__body">
+                <pre className="openapi-modal__code">
+                  <OpenApiHighlight doc={openApiDoc} />
+                </pre>
               </div>
             </motion.div>
           </motion.div>

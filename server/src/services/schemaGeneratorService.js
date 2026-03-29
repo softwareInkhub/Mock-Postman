@@ -1,7 +1,6 @@
 const { generateText } = require('./llmService');
 const {
-  buildDomainBriefPrompt,
-  buildSchemaGenerationPrompt,
+  buildSchemaEnhancementPrompt,
   buildSchemaRepairPrompt,
 } = require('../prompts/schemaPrompts');
 const { validateSchemaShape } = require('./schemaValidationService');
@@ -13,12 +12,16 @@ const {
   getRetrieverStrategy,
   storeGeneratedSchemaMemory,
 } = require('./schemaMemoryService');
+const { buildSchema } = require('./schemaBuilderService');
 
 const MAX_REPAIR_ATTEMPTS = 2;
-const DOMAIN_BRIEF_MAX_TOKENS = 900;
 const DEFAULT_SCHEMA_MAX_TOKENS = 4096;
 const SQL_ENGINES = new Set(['postgresql', 'mysql', 'sqlite', 'sqlserver']);
 const NOSQL_ENGINES = new Set(['mongodb', 'dynamodb', 'firestore', 'cassandra']);
+
+// ---------------------------------------------------------------------------
+// Output mode inference (kept for normaliseSchemaRequest compatibility)
+// ---------------------------------------------------------------------------
 
 const inferOutputMode = ({ prompt, database }) => {
   const normalizedDatabase = String(database || '').trim().toLowerCase();
@@ -127,21 +130,13 @@ const callModel = async ({ prompt, payload, system, maxTokens }) => {
   return llmResult;
 };
 
-const callPlanningModel = async ({ prompt, payload }) =>
-  callModel({
-    prompt,
-    payload,
-    maxTokens: Math.min(payload.maxTokens, DOMAIN_BRIEF_MAX_TOKENS),
-    system: 'You produce compact JSON planning briefs for backend schema generation.',
-  });
-
 const callSchemaModel = async ({ prompt, payload }) =>
   callModel({
     prompt,
     payload,
     maxTokens: payload.maxTokens,
     system:
-      'You generate valid JSON for backend schema design tasks. Keep the output concise and structured.',
+      'You enhance valid JSON database schemas. Return only valid JSON matching the provided contract exactly.',
   });
 
 const normalizeSchemaRequest = (payload = {}) => {
@@ -168,46 +163,6 @@ const normalizeSchemaRequest = (payload = {}) => {
   };
 };
 
-const buildCompactSchemaFallback = (request) => ({
-  ...request,
-  outputMode: request.outputMode === 'both' ? 'sql' : request.outputMode,
-  requestedEngine:
-    request.outputMode === 'both'
-      ? request.requestedEngine || 'postgresql'
-      : request.requestedEngine,
-});
-
-const getDefaultDomainBrief = (request) => ({
-  domain: 'general application backend',
-  summary: request.prompt,
-  recommended_scope: 'mvp',
-  sql_entities: [],
-  nosql_entities: [],
-  relationship_hints: [],
-  field_hints: [],
-});
-
-const generateDomainBrief = async ({ request, memoryContexts }) => {
-  const planningPrompt = buildDomainBriefPrompt({
-    userPrompt: request.prompt,
-    sourceData: request.sourceData,
-    outputMode: request.outputMode,
-    requestedEngine: request.requestedEngine,
-    memoryContexts,
-  });
-
-  try {
-    const planningResult = await callPlanningModel({
-      prompt: planningPrompt,
-      payload: request,
-    });
-
-    return parseJsonObject(planningResult.response);
-  } catch (error) {
-    return getDefaultDomainBrief(request);
-  }
-};
-
 const validateModelResponse = (llmResult) => {
   try {
     const schema = parseJsonObject(llmResult.response);
@@ -228,97 +183,106 @@ const validateModelResponse = (llmResult) => {
   }
 };
 
-const generateSchema = async (payload = {}) => {
-  const request = normalizeSchemaRequest(payload);
-  const memoryContexts = await getRelevantSchemaMemories({
-    prompt: request.prompt,
+/**
+ * Optional AI enhancement pass.
+ * Takes the deterministically built schema and asks the LLM to improve it
+ * (descriptions, field suggestions, relationship hints) without replacing it.
+ * If the LLM is not configured or fails, the deterministic schema is returned as-is.
+ */
+const tryEnhanceWithAi = async ({ schema, request, memoryContexts }) => {
+  if (!request.provider) {
+    return { schema, aiUsed: false, repairAttempt: 0, llmMeta: null };
+  }
+
+  const enhancementPrompt = buildSchemaEnhancementPrompt({
+    userPrompt: request.prompt,
     sourceData: request.sourceData,
-  });
-  const domainBrief = await generateDomainBrief({
-    request,
+    schema,
     memoryContexts,
   });
 
-  const buildPrompt = ({ activeRequest, compactMode = false }) =>
-    buildSchemaGenerationPrompt({
-      userPrompt: activeRequest.prompt,
-      sourceData: activeRequest.sourceData,
-      outputMode: activeRequest.outputMode,
-      requestedEngine: activeRequest.requestedEngine,
-      memoryContexts,
-      domainBrief,
-      compactMode,
-    });
-
-  let activeRequest = request;
-  let compactFallbackUsed = false;
-  let llmResult = await callSchemaModel({
-    prompt: buildPrompt({ activeRequest }),
-    payload: activeRequest,
-  });
-
-  let { schema, validation, parseError } = validateModelResponse(llmResult);
-  let repairAttempt = 0;
-
-  if (parseError && llmResult.meta?.stopReason === 'max_tokens') {
-    compactFallbackUsed = true;
-    activeRequest = buildCompactSchemaFallback(request);
-    llmResult = await callSchemaModel({
-      prompt: buildPrompt({
-        activeRequest,
-        compactMode: true,
-      }),
-      payload: activeRequest,
-    });
-
-    ({ schema, validation, parseError } = validateModelResponse(llmResult));
+  let llmResult;
+  try {
+    llmResult = await callSchemaModel({ prompt: enhancementPrompt, payload: request });
+  } catch (err) {
+    // AI unavailable — silently fall back to deterministic schema
+    return { schema, aiUsed: false, repairAttempt: 0, llmMeta: null };
   }
+
+  if (!llmResult.success) {
+    return { schema, aiUsed: false, repairAttempt: 0, llmMeta: llmResult };
+  }
+
+  let { schema: enhancedSchema, validation, parseError } = validateModelResponse(llmResult);
+  let repairAttempt = 0;
 
   while ((!validation.valid || parseError) && repairAttempt < MAX_REPAIR_ATTEMPTS) {
     repairAttempt += 1;
-
     llmResult = await callSchemaModel({
       prompt: buildSchemaRepairPrompt({
         originalPrompt: request.prompt,
         invalidResponse: llmResult.response,
         validationErrors: validation.errors,
       }),
-      payload: activeRequest,
+      payload: request,
     });
-
-    ({ schema, validation, parseError } = validateModelResponse(llmResult));
+    ({ schema: enhancedSchema, validation, parseError } = validateModelResponse(llmResult));
   }
 
-  if (parseError) {
-    const stopReason = llmResult.meta?.stopReason;
-    const stopReasonMessage =
-      stopReason === 'max_tokens'
-        ? ` Anthropic stopped because it hit max_tokens (${activeRequest.maxTokens}). The service retried with a compact schema prompt but still could not finish.`
-        : '';
-
-    throw new Error(
-      `Schema generation returned malformed JSON after retries: ${parseError.message}.${stopReasonMessage}`
-    );
+  // If AI produced broken JSON even after repairs, fall back to deterministic output
+  if (parseError || !validation.valid) {
+    return { schema, aiUsed: false, repairAttempt, llmMeta: llmResult };
   }
 
-  if (!validation.valid) {
-    throw new Error(`Generated schema is invalid: ${validation.errors.join(' ')}`);
+  return { schema: enhancedSchema, aiUsed: true, repairAttempt, llmMeta: llmResult };
+};
+
+const generateSchema = async (payload = {}) => {
+  const request = normalizeSchemaRequest(payload);
+
+  // ── Step 1: Deterministic schema build (no AI) ───────────────────────────
+  const { architectures, meta: builderMeta } = buildSchema({
+    prompt: request.prompt,
+    sourceData: request.sourceData,
+    outputMode: request.outputMode,
+    requestedEngine: request.requestedEngine,
+  });
+
+  let schema = { architectures };
+
+  // ── Step 2: Validate deterministic output ────────────────────────────────
+  const deterministicValidation = validateSchemaShape(schema);
+  if (!deterministicValidation.valid) {
+    throw new Error(`Deterministic schema build failed validation: ${deterministicValidation.errors.join(' ')}`);
   }
 
-  const enhancedSchema = enhanceSchemaRelationships(schema);
-  const enhancedValidation = validateSchemaShape(enhancedSchema);
+  // ── Step 3: Retrieve memory context (for AI enhancement prompt) ──────────
+  const memoryContexts = await getRelevantSchemaMemories({
+    prompt: request.prompt,
+    sourceData: request.sourceData,
+  });
 
-  if (!enhancedValidation.valid) {
-    throw new Error(`Generated schema is invalid: ${enhancedValidation.errors.join(' ')}`);
+  // ── Step 4: Optional AI enhancement pass ─────────────────────────────────
+  const { schema: finalSchema, aiUsed, repairAttempt, llmMeta } = await tryEnhanceWithAi({
+    schema,
+    request,
+    memoryContexts,
+  });
+
+  // ── Step 5: Post-processing (deterministic) ───────────────────────────────
+  const enhancedSchema = enhanceSchemaRelationships(finalSchema);
+  const finalValidation = validateSchemaShape(enhancedSchema);
+
+  if (!finalValidation.valid) {
+    throw new Error(`Schema is invalid after post-processing: ${finalValidation.errors.join(' ')}`);
   }
 
+  // ── Step 6: Persist to memory ────────────────────────────────────────────
   storeGeneratedSchemaMemory({
     prompt: request.prompt,
     sourceData: request.sourceData,
     schema: enhancedSchema,
-    meta: {
-      title: request.prompt,
-    },
+    meta: { title: request.prompt },
   });
 
   return {
@@ -330,19 +294,23 @@ const generateSchema = async (payload = {}) => {
     prompt: request.prompt,
     sourceData: request.sourceData,
     meta: {
-      provider: llmResult.provider,
-      model: llmResult.model,
-      outputMode: request.outputMode,
-      finalOutputMode: activeRequest.outputMode,
-      requestedEngine: activeRequest.requestedEngine,
+      domain: builderMeta.domain,
+      domainLabel: builderMeta.domainLabel,
+      compositionMode: builderMeta.compositionMode,
+      featuresUsed: builderMeta.featuresUsed,
+      outputMode: builderMeta.outputMode,
+      requestedEngine: builderMeta.requestedEngine,
+      extraEntities: builderMeta.extraEntities,
+      deterministic: true,
+      aiEnhanced: aiUsed,
+      provider: llmMeta?.provider || null,
+      model: llmMeta?.model || null,
       maxTokens: request.maxTokens,
       memoryHits: memoryContexts.length,
       retrieverStrategy: getRetrieverStrategy(),
-      compactFallbackUsed,
-      plannedDomain: domainBrief.domain || null,
       repaired: repairAttempt > 0,
-      durationMs: llmResult.meta?.durationMs || null,
-      stopReason: llmResult.meta?.stopReason || null,
+      durationMs: llmMeta?.meta?.durationMs || null,
+      stopReason: llmMeta?.meta?.stopReason || null,
     },
   };
 };
