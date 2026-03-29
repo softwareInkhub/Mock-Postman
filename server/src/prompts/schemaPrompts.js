@@ -212,6 +212,48 @@ Example of a NoSQL field:
 `.trim();
 };
 
+/**
+ * Enhancement prompt — AI receives a deterministically generated schema
+ * and is asked to improve it, NOT replace it.
+ * It should: add better descriptions, suggest missing MVP fields,
+ * improve field types where obviously wrong, and apply relationship hints.
+ * It must return the full schema JSON in the same contract shape.
+ */
+const buildSchemaEnhancementPrompt = ({
+  userPrompt,
+  sourceData,
+  schema,
+  memoryContexts = [],
+}) => {
+  const sourceDataSection = sourceData
+    ? `Source JSON provided by the user (use for entity/field confirmation only):\n${stringify(sourceData)}\n`
+    : 'No source JSON provided.\n';
+
+  return `
+You are a senior backend architect reviewing a database schema that was generated automatically.
+
+Original user request:
+"${userPrompt}"
+
+${sourceDataSection}
+${buildMemorySection(memoryContexts)}
+Here is the auto-generated schema. Your job is to IMPROVE it, not replace it:
+
+${stringify(schema)}
+
+Enhancement rules:
+- Keep all existing tables and collections — do NOT remove any
+- Keep all existing column and field names — only rename if clearly wrong
+- Improve or add descriptions for tables, collections, columns, and fields
+- Add missing MVP fields that are obviously needed but absent (e.g. a users table missing email)
+- Fix field types only if clearly incorrect (e.g. a price field typed as boolean)
+- Add missing foreign keys where a relationship is obvious from column names
+- Do NOT add analytics, audit, notification, admin, or reporting tables unless the user asked
+- Return only valid JSON matching the exact same contract shape as the input schema
+- Output ONLY JSON — no markdown fences, no explanation
+`.trim();
+};
+
 const buildSchemaRepairPrompt = ({
   originalPrompt,
   invalidResponse,
@@ -236,5 +278,6 @@ module.exports = {
   OUTPUT_CONTRACT,
   buildDomainBriefPrompt,
   buildSchemaGenerationPrompt,
+  buildSchemaEnhancementPrompt,
   buildSchemaRepairPrompt,
 };
