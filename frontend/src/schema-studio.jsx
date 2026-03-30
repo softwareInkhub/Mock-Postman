@@ -69,6 +69,59 @@ function OpenApiHighlight({ doc }) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Lightweight YAML syntax highlighter (no external deps)
+// ---------------------------------------------------------------------------
+function YamlHighlight({ text }) {
+  return text.split('\n').map((line, i) => {
+    // Comment
+    if (/^\s*#/.test(line)) {
+      return <div key={i}><span className="oa-comment">{line}</span></div>;
+    }
+    // Key: value  OR  key:
+    const kvMatch = line.match(/^(\s*)([\w$@.-]+)(\s*:\s*)(.*)$/);
+    if (kvMatch) {
+      const [, indent, key, colon, rest] = kvMatch;
+      let valueNode;
+      if (!rest) {
+        valueNode = null;
+      } else if (/^["']/.test(rest)) {
+        valueNode = <span className="oa-string">{rest}</span>;
+      } else if (/^(true|false)$/.test(rest)) {
+        valueNode = <span className="oa-bool">{rest}</span>;
+      } else if (/^null$/.test(rest)) {
+        valueNode = <span className="oa-null">{rest}</span>;
+      } else if (/^-?\d/.test(rest)) {
+        valueNode = <span className="oa-number">{rest}</span>;
+      } else {
+        valueNode = <span className="oa-string">{rest}</span>;
+      }
+      return (
+        <div key={i}>
+          {indent}
+          <span className="oa-key">{key}</span>
+          <span className="oa-punct">{colon}</span>
+          {valueNode}
+        </div>
+      );
+    }
+    // List item
+    if (/^\s*-\s/.test(line)) {
+      const dashMatch = line.match(/^(\s*-\s)(.*)$/);
+      if (dashMatch) {
+        const [, dash, rest] = dashMatch;
+        return (
+          <div key={i}>
+            <span className="oa-punct">{dash}</span>
+            <span className="oa-string">{rest}</span>
+          </div>
+        );
+      }
+    }
+    return <div key={i}>{line}</div>;
+  });
+}
+
 const STORAGE_KEY = 'brmh-schema-preview';
 const NODE_WIDTH = 300;
 const NODE_HEIGHT_COLLAPSED = 76;
@@ -283,7 +336,9 @@ function StudioCanvas() {
   const [augmentLoading, setAugmentLoading] = useState(false);
   const [error, setError] = useState('');
   const [augmentError, setAugmentError] = useState('');
-  const [openApiDoc, setOpenApiDoc] = useState(null);   // null = closed, object = open
+  const [openApiDoc, setOpenApiDoc] = useState(null);       // null = closed, object = open
+  const [openApiYaml, setOpenApiYaml] = useState('');       // YAML string from server
+  const [openApiFormat, setOpenApiFormat] = useState('json'); // 'json' | 'yaml'
   const [openApiLoading, setOpenApiLoading] = useState(false);
   const [openApiError, setOpenApiError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -433,6 +488,7 @@ function StudioCanvas() {
             : 'Generated API',
           version: '1.0.0',
           sourceArch: mode,
+          format: 'yaml',
         }),
       });
       const result = await response.json();
@@ -440,6 +496,7 @@ function StudioCanvas() {
         throw new Error(result.error?.message || 'Failed to generate OpenAPI spec.');
       }
       setOpenApiDoc(result.openapi);
+      setOpenApiYaml(result.yamlText || '');
     } catch (err) {
       setOpenApiError(err.message || 'Failed to generate OpenAPI spec.');
     } finally {
@@ -449,23 +506,30 @@ function StudioCanvas() {
 
   const copyOpenApi = useCallback(() => {
     if (!openApiDoc) return;
-    navigator.clipboard.writeText(JSON.stringify(openApiDoc, null, 2)).then(() => {
+    const text = openApiFormat === 'yaml'
+      ? openApiYaml
+      : JSON.stringify(openApiDoc, null, 2);
+    navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     });
-  }, [openApiDoc]);
+  }, [openApiDoc, openApiYaml, openApiFormat]);
 
   const downloadOpenApi = useCallback(() => {
     if (!openApiDoc) return;
-    const blob = new Blob([JSON.stringify(openApiDoc, null, 2)], { type: 'application/json' });
+    const isYaml = openApiFormat === 'yaml';
+    const content = isYaml ? openApiYaml : JSON.stringify(openApiDoc, null, 2);
+    const mime = isYaml ? 'text/yaml' : 'application/json';
+    const ext  = isYaml ? 'yaml' : 'json';
+    const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const slug = (openApiDoc.info?.title || 'openapi').toLowerCase().replace(/\s+/g, '-');
     a.href = url;
-    a.download = `${slug}.json`;
+    a.download = `${slug}.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [openApiDoc]);
+  }, [openApiDoc, openApiYaml, openApiFormat]);
 
   if (!payload?.schemaResult) {
     return (
@@ -772,13 +836,26 @@ function StudioCanvas() {
                   </p>
                 </div>
                 <div className="openapi-modal__header-right">
+                  {/* Format toggle */}
+                  <div className="openapi-format-toggle">
+                    <button
+                      type="button"
+                      className={`openapi-format-btn${openApiFormat === 'json' ? ' openapi-format-btn--active' : ''}`}
+                      onClick={() => setOpenApiFormat('json')}
+                    >JSON</button>
+                    <button
+                      type="button"
+                      className={`openapi-format-btn${openApiFormat === 'yaml' ? ' openapi-format-btn--active' : ''}`}
+                      onClick={() => setOpenApiFormat('yaml')}
+                    >YAML</button>
+                  </div>
                   <button
                     type="button"
                     className="openapi-action-btn openapi-action-btn--copy"
                     onClick={copyOpenApi}
                   >
                     {copied ? <Check size={14} /> : <Clipboard size={14} />}
-                    {copied ? 'Copied!' : 'Copy JSON'}
+                    {copied ? 'Copied!' : `Copy ${openApiFormat.toUpperCase()}`}
                   </button>
                   <button
                     type="button"
@@ -786,7 +863,7 @@ function StudioCanvas() {
                     onClick={downloadOpenApi}
                   >
                     <Download size={14} />
-                    Download .json
+                    {`Download .${openApiFormat}`}
                   </button>
                   <button
                     type="button"
@@ -798,10 +875,12 @@ function StudioCanvas() {
                 </div>
               </div>
 
-              {/* Scrollable JSON body */}
+              {/* Scrollable body */}
               <div className="openapi-modal__body">
                 <pre className="openapi-modal__code">
-                  <OpenApiHighlight doc={openApiDoc} />
+                  {openApiFormat === 'yaml'
+                    ? <YamlHighlight text={openApiYaml} />
+                    : <OpenApiHighlight doc={openApiDoc} />}
                 </pre>
               </div>
             </motion.div>

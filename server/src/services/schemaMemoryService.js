@@ -2,14 +2,22 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { SCHEMA_EXAMPLES } = require('../data/schemaExampleLibrary');
+const {
+  getDb,
+  getMongoDebugState,
+  SCHEMA_MEMORY_COLLECTION,
+} = require('../db/mongoClient');
 
 let langChainModules = null;
 let lastExampleId = null;
+let currentMemoryBackend = 'json_file_fallback';
+let mongoBackfillPromise = null;
 
 const MEMORY_FILE_PATH = path.join(__dirname, '..', 'data', 'schema-memory.json');
 const VECTOR_DIMENSION = 96;
 const DEFAULT_MEMORY_LIMIT = 2;
 const MIN_RELEVANCE_SCORE = 0.18;
+const MAX_PERSISTED_MEMORY_ENTRIES = 250;
 
 const BRAND_ALIASES = {
   uber: 'ride hailing taxi booking riders drivers trips fare payments',
@@ -36,7 +44,6 @@ const tryLoadLangChain = () => {
   }
 
   try {
-    // Lazy-load so the server still runs if dependencies are not installed yet.
     const { MemoryVectorStore } = require('langchain/vectorstores/memory');
     const { Embeddings } = require('@langchain/core/embeddings');
     class DeterministicEmbeddings extends Embeddings {
@@ -80,14 +87,113 @@ const safeParseJson = (value, fallback) => {
   }
 };
 
-const readPersistedMemories = () => {
+const readJsonMemoryEntries = () => {
   ensureMemoryFile();
   return safeParseJson(fs.readFileSync(MEMORY_FILE_PATH, 'utf8'), []);
 };
 
-const writePersistedMemories = (entries) => {
+const writeJsonMemoryEntries = (entries) => {
   ensureMemoryFile();
-  fs.writeFileSync(MEMORY_FILE_PATH, JSON.stringify(entries, null, 2), 'utf8');
+  fs.writeFileSync(
+    MEMORY_FILE_PATH,
+    JSON.stringify(entries.slice(0, MAX_PERSISTED_MEMORY_ENTRIES), null, 2),
+    'utf8'
+  );
+};
+
+const backfillJsonMemoriesToMongo = async (db) => {
+  if (mongoBackfillPromise) {
+    return mongoBackfillPromise;
+  }
+
+  mongoBackfillPromise = (async () => {
+    const legacyEntries = readJsonMemoryEntries().filter(
+      (entry) => entry && entry.type === 'generated' && entry.fingerprint
+    );
+
+    if (!legacyEntries.length) {
+      return { imported: 0, source: 'empty_json_memory' };
+    }
+
+    const collection = db.collection(SCHEMA_MEMORY_COLLECTION);
+    const operations = legacyEntries.map((entry) => ({
+      updateOne: {
+        filter: { fingerprint: entry.fingerprint },
+        update: { $setOnInsert: entry },
+        upsert: true,
+      },
+    }));
+
+    const result = await collection.bulkWrite(operations, { ordered: false });
+    const imported = (result.upsertedCount || 0) + (result.insertedCount || 0);
+
+    if (imported > 0) {
+      console.log(`[Memory] Imported ${imported} legacy schema memories into MongoDB.`);
+    }
+
+    return { imported, source: 'json_file' };
+  })().catch((error) => {
+    console.warn('[Memory] MongoDB backfill failed, continuing with existing storage:', error.message);
+    return { imported: 0, source: 'json_file', failed: true };
+  });
+
+  return mongoBackfillPromise;
+};
+
+const getMongoCollection = async () => {
+  const db = await getDb();
+  if (!db) {
+    currentMemoryBackend = 'json_file_fallback';
+    return null;
+  }
+
+  currentMemoryBackend = 'mongodb';
+  await backfillJsonMemoriesToMongo(db);
+  return db.collection(SCHEMA_MEMORY_COLLECTION);
+};
+
+const readPersistedMemories = async () => {
+  try {
+    const collection = await getMongoCollection();
+    if (collection) {
+      const docs = await collection
+        .find({ type: 'generated' })
+        .sort({ createdAt: -1 })
+        .limit(MAX_PERSISTED_MEMORY_ENTRIES)
+        .toArray();
+
+      return docs.map(({ _id, ...rest }) => rest);
+    }
+  } catch (err) {
+    currentMemoryBackend = 'json_file_fallback';
+    console.warn('[Memory] MongoDB read failed, using JSON file:', err.message);
+  }
+
+  return readJsonMemoryEntries();
+};
+
+const persistMemoryEntry = async (entry) => {
+  try {
+    const collection = await getMongoCollection();
+    if (collection) {
+      const { fingerprint, ...rest } = entry;
+      await collection.updateOne(
+        { fingerprint },
+        { $setOnInsert: { fingerprint, ...rest } },
+        { upsert: true }
+      );
+      return;
+    }
+  } catch (err) {
+    currentMemoryBackend = 'json_file_fallback';
+    console.warn('[Memory] MongoDB write failed, using JSON file:', err.message);
+  }
+
+  const existing = readJsonMemoryEntries();
+  if (!existing.some((item) => item.fingerprint === entry.fingerprint)) {
+    existing.unshift(entry);
+    writeJsonMemoryEntries(existing);
+  }
 };
 
 const normalizeWhitespace = (value) =>
@@ -269,7 +375,10 @@ const buildSeedEntries = () =>
     createdAt: 'seeded',
   }));
 
-const getAllMemoryEntries = () => [...buildSeedEntries(), ...readPersistedMemories()];
+const getAllMemoryEntries = async () => {
+  const persisted = await readPersistedMemories();
+  return [...buildSeedEntries(), ...persisted];
+};
 
 const pickDistinctEntries = (results, limit) => {
   const seenIds = new Set();
@@ -349,7 +458,7 @@ const formatMemoryForPrompt = (result) => ({
 });
 
 const getRelevantSchemaMemories = async ({ prompt, sourceData, limit = DEFAULT_MEMORY_LIMIT }) => {
-  const entries = getAllMemoryEntries();
+  const entries = await getAllMemoryEntries();
   const queryText = inferQueryExpansion({ prompt, sourceData });
 
   if (!queryText) {
@@ -374,18 +483,9 @@ const buildMemoryFingerprint = ({ prompt, sourceData, schemaSummary }) =>
 const storeGeneratedSchemaMemory = ({ prompt, sourceData, schema, meta }) => {
   const schemaSummary = summarizeSchema(schema);
   const schemaInsights = extractSchemaInsights(schema);
-  const persistedEntries = readPersistedMemories();
-  const fingerprint = buildMemoryFingerprint({
-    prompt,
-    sourceData,
-    schemaSummary,
-  });
+  const fingerprint = buildMemoryFingerprint({ prompt, sourceData, schemaSummary });
 
-  if (persistedEntries.some((entry) => entry.fingerprint === fingerprint)) {
-    return;
-  }
-
-  persistedEntries.unshift({
+  const entry = {
     id: `generated_${Date.now()}`,
     type: 'generated',
     title: meta?.title || 'Generated schema memory',
@@ -405,9 +505,11 @@ const storeGeneratedSchemaMemory = ({ prompt, sourceData, schema, meta }) => {
     relationshipHints: schemaInsights.relationshipHints,
     fingerprint,
     createdAt: new Date().toISOString(),
-  });
+  };
 
-  writePersistedMemories(persistedEntries.slice(0, 250));
+  persistMemoryEntry(entry).catch((err) =>
+    console.warn('[Memory] Failed to persist schema memory:', err.message)
+  );
 };
 
 const getRandomSchemaExample = () => {
@@ -421,12 +523,51 @@ const getRandomSchemaExample = () => {
   return selected;
 };
 
-const getRetrieverStrategy = () =>
-  tryLoadLangChain() ? 'langchain_memory_vector_store' : 'local_similarity_fallback';
+const getMemoryBackend = () => currentMemoryBackend;
+
+const getRetrieverStrategy = () => {
+  const retrieval = tryLoadLangChain() ? 'langchain_memory_vector_store' : 'local_similarity_fallback';
+  return `${currentMemoryBackend}:${retrieval}`;
+};
+
+const getMemoryStatus = async () => {
+  const jsonEntries = readJsonMemoryEntries();
+
+  try {
+    const collection = await getMongoCollection();
+    if (collection) {
+      const generatedCount = await collection.countDocuments({ type: 'generated' });
+      return {
+        backend: currentMemoryBackend,
+        collection: SCHEMA_MEMORY_COLLECTION,
+        generatedCount,
+        seedCount: SCHEMA_EXAMPLES.length,
+        fallbackJsonCount: jsonEntries.length,
+        retrieverStrategy: getRetrieverStrategy(),
+        mongo: getMongoDebugState(),
+      };
+    }
+  } catch (error) {
+    currentMemoryBackend = 'json_file_fallback';
+  }
+
+  return {
+    backend: currentMemoryBackend,
+    collection: null,
+    generatedCount: jsonEntries.filter((entry) => entry?.type === 'generated').length,
+    seedCount: SCHEMA_EXAMPLES.length,
+    fallbackJsonCount: jsonEntries.length,
+    retrieverStrategy: getRetrieverStrategy(),
+    mongo: getMongoDebugState(),
+  };
+};
 
 module.exports = {
   getRelevantSchemaMemories,
   getRandomSchemaExample,
   getRetrieverStrategy,
+  getMemoryBackend,
+  getMemoryStatus,
   storeGeneratedSchemaMemory,
 };
+

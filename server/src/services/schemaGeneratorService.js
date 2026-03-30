@@ -9,6 +9,7 @@ const { convertSchemaToSql } = require('./schemaSqlService');
 const { buildSchemaPreview } = require('./schemaPreviewService');
 const {
   getRelevantSchemaMemories,
+  getMemoryBackend,
   getRetrieverStrategy,
   storeGeneratedSchemaMemory,
 } = require('./schemaMemoryService');
@@ -307,6 +308,7 @@ const generateSchema = async (payload = {}) => {
       model: llmMeta?.model || null,
       maxTokens: request.maxTokens,
       memoryHits: memoryContexts.length,
+      memoryBackend: getMemoryBackend(),
       retrieverStrategy: getRetrieverStrategy(),
       repaired: repairAttempt > 0,
       durationMs: llmMeta?.meta?.durationMs || null,
@@ -318,3 +320,4 @@ const generateSchema = async (payload = {}) => {
 module.exports = {
   generateSchema,
 };
+
