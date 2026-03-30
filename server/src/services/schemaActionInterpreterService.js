@@ -128,6 +128,45 @@ Allowed operation shapes:
 Return JSON only.`;
 };
 
+const buildReviewPrompt = ({ existingSchema, instruction, mode, deterministicOperations }) => {
+  const scopeText =
+    mode === 'tables'
+      ? 'Only table or collection operations are allowed.'
+      : mode === 'fields'
+        ? 'Only field or column operations are allowed.'
+        : 'Table and field operations are allowed.';
+
+  return `You are validating whether a deterministic schema edit parser correctly understood a user request.
+
+Current schema summary:
+${summarizeSchema(existingSchema)}
+
+Original user instruction:
+"${instruction}"
+
+Deterministic parser output:
+${JSON.stringify(deterministicOperations, null, 2)}
+
+Rules:
+- The user may write in any human language. Understand the user's meaning before judging.
+- ${scopeText}
+- Compare the original instruction against the deterministic parser output.
+- If the deterministic parser is correct, approve it.
+- If it is incomplete, wrong, or misses the user's meaning, correct it.
+- Keep operation names in snake_case.
+- Return JSON only.
+
+Return shape:
+{
+  "approved": true,
+  "reason": "Short explanation.",
+  "normalizedInstruction": "English summary of what the user wants.",
+  "operations": [
+    { "type": "update_field", "table": "messages", "field": "body", "required": true }
+  ]
+}`;
+};
+
 const interpretSchemaInstruction = async ({ existingSchema, instruction, mode = 'edit', provider, model }) => {
   const llmResult = await generateText({
     provider,
@@ -157,6 +196,46 @@ const interpretSchemaInstruction = async ({ existingSchema, instruction, mode = 
   };
 };
 
+const reviewDeterministicSchemaInterpretation = async ({
+  existingSchema,
+  instruction,
+  deterministicOperations,
+  mode = 'edit',
+  provider,
+  model,
+}) => {
+  const llmResult = await generateText({
+    provider,
+    model,
+    maxTokens: 1800,
+    system:
+      'You validate schema-edit intent across languages. Compare the user request with the proposed operations and return JSON only.',
+    prompt: buildReviewPrompt({ existingSchema, instruction, mode, deterministicOperations }),
+  });
+
+  if (!llmResult.success) {
+    throw new Error(llmResult.error?.message || 'Schema interpretation review failed.');
+  }
+
+  const parsed = parseJsonObject(llmResult.response);
+  const operations = Array.isArray(parsed.operations)
+    ? parsed.operations.map(normalizeOperation).filter((operation) => validateOperation(operation, mode))
+    : [];
+
+  return {
+    approved: parsed.approved !== false,
+    reason: typeof parsed.reason === 'string' ? parsed.reason.trim() : '',
+    normalizedInstruction:
+      typeof parsed.normalizedInstruction === 'string'
+        ? parsed.normalizedInstruction.trim()
+        : '',
+    operations: operations.length ? operations : deterministicOperations,
+    raw: parsed,
+    llmMeta: llmResult.meta || null,
+  };
+};
+
 module.exports = {
   interpretSchemaInstruction,
+  reviewDeterministicSchemaInterpretation,
 };

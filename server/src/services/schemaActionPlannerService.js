@@ -73,7 +73,7 @@ const splitInstructionIntoClauses = (instruction) =>
   String(instruction || '')
     .replace(/[.;]+/g, ',')
     .replace(/\s+/g, ' ')
-    .split(/\s*(?:(?:,\s*)?(?=add\b|create\b|include\b|append\b|insert\b|remove\b|delete\b|drop\b|eliminate\b|rename\b|change\b|make\b|set\b|update\b|connect\b|link\b|relate\b|attach\b|join\b|show\b|read\b|inspect\b|explain\b))/i)
+    .split(/\s*(?:(?:,\s*)?(?=add\b|create\b|include\b|append\b|insert\b|remove\b|delete\b|drop\b|eliminate\b|rename\b|change\b|make\b|set\b|update\b|connect\b|link\b|relate\b|attach\b|join\b|show\b|read\b|inspect\b|explain\b|define\b|establish\b|associate\b|bridge\b|wire\b|map\b|tie\b|reference\b|belong\b))/i)
     .map(stripTrailingConnector)
     .filter(Boolean);
 
@@ -240,14 +240,49 @@ const parseReadOperation = (index, clause, mode) => {
   return [];
 };
 
+const extractTablePair = (index, rawA, rawB) => {
+  const source = resolveTableName(index, splitPhraseList(rawA)[0]);
+  const targets = splitPhraseList(rawB).map((t) => resolveTableName(index, t));
+  return targets.filter(Boolean).map((target) => ({ type: 'connect_tables', sourceTable: source, targetTable: target }));
+};
+
 const parseConnectOperation = (index, clause, mode) => {
   if (mode === 'fields') return [];
-  const match = clause.match(/^(?:connect|link|relate|attach|join)\s+(.+?)\s+(?:to|with)\s+(.+)$/i);
-  if (!match) return [];
+  const text = clause.trim();
 
-  const source = resolveTableName(index, splitPhraseList(match[1])[0]);
-  const targets = splitPhraseList(match[2]).map((target) => resolveTableName(index, target));
-  return targets.filter(Boolean).map((target) => ({ type: 'connect_tables', sourceTable: source, targetTable: target }));
+  // Pattern 1 — classic: connect|link|relate|attach|join|associate|bridge|tie|map|wire X to|with Y
+  let m = text.match(/^(?:connect|link|relate|attach|join|associate|bridge|tie|map|wire)\s+(.+?)\s+(?:to|with)\s+(.+)$/i);
+  if (m) return extractTablePair(index, m[1], m[2]);
+
+  // Pattern 2 — "define|establish|create|add|build|set up|put a connection|relationship|link|association between X and Y"
+  m = text.match(/^(?:define|establish|create|add|make|build|put|set\s+up|wire\s+up)?\s*(?:a\s+|an\s+)?(?:connection|relationship|relation|link|association|foreign[\s_]key|ref|reference|join|bridge)\s+between\s+(.+?)\s+and\s+(.+)$/i);
+  if (m) return extractTablePair(index, m[1], m[2]);
+
+  // Pattern 3 — "between X and Y" anywhere in clause (catches "define a connection between X and Y" variants)
+  m = text.match(/\bbetween\s+(.+?)\s+and\s+(.+)$/i);
+  if (m) return extractTablePair(index, m[1], m[2]);
+
+  // Pattern 4 — "X references|belongs to|is linked to|is related to|depends on Y"
+  m = text.match(/^(.+?)\s+(?:references?|belongs?\s+to|is\s+linked\s+to|is\s+connected\s+to|is\s+related\s+to|is\s+associated\s+with|depends?\s+on|ties?\s+to)\s+(.+)$/i);
+  if (m) return extractTablePair(index, m[1], m[2]);
+
+  // Pattern 5 — "X and Y should be connected|linked|related|associated|joined"
+  m = text.match(/^(.+?)\s+and\s+(.+?)\s+(?:should\s+be|must\s+be|needs?\s+to\s+be|have\s+to\s+be|needs?\s+(?:a\s+)?(?:to\s+be)?)\s*(?:connected|linked|related|associated|tied|joined|bridged)$/i);
+  if (m) return extractTablePair(index, m[1], m[2]);
+
+  // Pattern 6 — "link|connect X and Y (together)"
+  m = text.match(/^(?:link|connect|join|associate|tie|bridge)\s+(.+?)\s+and\s+(.+?)(?:\s+together)?$/i);
+  if (m) return extractTablePair(index, m[1], m[2]);
+
+  // Pattern 7 — "add a relationship|foreign key|reference from X to Y"
+  m = text.match(/^(?:add|create|define|put)\s+(?:a\s+)?(?:relationship|foreign[\s_]key|reference|ref|link|connection)\s+from\s+(.+?)\s+to\s+(.+)$/i);
+  if (m) return extractTablePair(index, m[1], m[2]);
+
+  // Pattern 8 — "X has many|has one|has a Y" / "X belongs to Y" / "X is part of Y"
+  m = text.match(/^(.+?)\s+(?:has\s+(?:many|one|a|an)|is\s+part\s+of|is\s+under|is\s+owned\s+by|belongs?\s+to)\s+(.+)$/i);
+  if (m) return extractTablePair(index, m[1], m[2]);
+
+  return [];
 };
 
 const parseRenameTable = (index, clause, mode) => {
@@ -290,7 +325,7 @@ const parseTableMutations = (index, clause, mode) => {
   if (removeMatch) {
     splitPhraseList(removeMatch[1]).forEach((name) => operations.push({ type: 'remove_table', table: resolveTableName(index, name) }));
   }
-  const addMatch = clause.match(/(?:add|create|include|append|insert)\s+(.+?)(?=(?:\bremove\b|\bdelete\b|\bdrop\b|\beliminate\b|$))/i);
+  const addMatch = clause.match(/(?:add|create|include|append|insert|introduce|define|establish|set\s+up|build)\s+(.+?)(?=(?:\bremove\b|\bdelete\b|\bdrop\b|\beliminate\b|$))/i);
   if (addMatch) {
     splitPhraseList(addMatch[1]).forEach((name) => operations.push({ type: 'add_table', table: resolveTableName(index, name) }));
   }

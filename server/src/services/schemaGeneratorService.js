@@ -14,6 +14,11 @@ const {
   storeGeneratedSchemaMemory,
 } = require('./schemaMemoryService');
 const { buildSchema } = require('./schemaBuilderService');
+const {
+  enrichSchemaConstraints,
+  validateSchemaWithAjv,
+  buildValidationReport,
+} = require('./schemaConstraintEnricherService');
 
 const MAX_REPAIR_ATTEMPTS = 2;
 const DEFAULT_SCHEMA_MAX_TOKENS = 4096;
@@ -271,12 +276,19 @@ const generateSchema = async (payload = {}) => {
   });
 
   // ── Step 5: Post-processing (deterministic) ───────────────────────────────
-  const enhancedSchema = enhanceSchemaRelationships(finalSchema);
-  const finalValidation = validateSchemaShape(enhancedSchema);
+  const relationshipSchema = enhanceSchemaRelationships(finalSchema);
+  const finalValidation = validateSchemaShape(relationshipSchema);
 
   if (!finalValidation.valid) {
     throw new Error(`Schema is invalid after post-processing: ${finalValidation.errors.join(' ')}`);
   }
+
+  // ── Step 5b: Constraint enrichment — enums, validation rules, precise SQL types
+  const enhancedSchema = enrichSchemaConstraints(relationshipSchema);
+
+  // ── Step 5c: AJV JSON Schema 2020-12 validation of the enriched schema object
+  const ajvReport = validateSchemaWithAjv(enhancedSchema);
+  const validationReport = buildValidationReport(enhancedSchema);
 
   // ── Step 6: Persist to memory ────────────────────────────────────────────
   storeGeneratedSchemaMemory({
@@ -294,6 +306,10 @@ const generateSchema = async (payload = {}) => {
     sql: request.includeSql ? convertSchemaToSql(enhancedSchema) : null,
     prompt: request.prompt,
     sourceData: request.sourceData,
+    validation: {
+      ajv: ajvReport,
+      fieldReport: validationReport,
+    },
     meta: {
       domain: builderMeta.domain,
       domainLabel: builderMeta.domainLabel,

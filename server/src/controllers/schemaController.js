@@ -26,8 +26,8 @@ const augmentSchemaHandler = async (request, response, next) => {
 
 const editSchemaHandler = async (request, response, next) => {
   try {
-    const { existingSchema, instruction } = request.body;
-    const result = await editSchema({ existingSchema, instruction });
+    const { existingSchema, instruction, provider, model } = request.body;
+    const result = await editSchema({ existingSchema, instruction, provider, model });
     response.status(200).json(result);
   } catch (error) {
     next(error);
