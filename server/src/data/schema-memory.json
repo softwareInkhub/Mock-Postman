@@ -1,5 +1,821 @@
 [
   {
+    "id": "generated_1774826561168",
+    "type": "generated",
+    "title": "social media app",
+    "prompt": "social media app",
+    "tags": [],
+    "sourceData": null,
+    "sourceSummary": "",
+    "domainSummary": "social media app: social media app",
+    "queryExpansion": "social media app",
+    "schema": {
+      "architectures": [
+        {
+          "database_type": "sql",
+          "database_engine": "postgresql",
+          "use_case": "Best when strong relationships and transactional consistency matter.",
+          "tables": [
+            {
+              "name": "users",
+              "description": "Registered user accounts.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "id for the users table."
+                },
+                {
+                  "name": "email",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "email for the users table."
+                },
+                {
+                  "name": "password_hash",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "password_hash for the users table."
+                },
+                {
+                  "name": "role",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "role for the users table."
+                },
+                {
+                  "name": "is_verified",
+                  "type": "boolean",
+                  "required": true,
+                  "description": "is_verified for the users table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "created_at for the users table."
+                }
+              ]
+            },
+            {
+              "name": "socials",
+              "description": "Stores socials records.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "Primary key for the socials table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "Timestamp when the socials was created."
+                }
+              ]
+            },
+            {
+              "name": "medias",
+              "description": "Stores medias records.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "Primary key for the medias table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "Timestamp when the medias was created."
+                }
+              ]
+            },
+            {
+              "name": "media",
+              "description": "Stores media records.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "Primary key for the media table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "Timestamp when the media was created."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "database_type": "nosql",
+          "database_engine": "mongodb",
+          "use_case": "Best when flexible document structures are more important than joins.",
+          "collections": [
+            {
+              "name": "users",
+              "description": "User accounts.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "_id for the users collection."
+                },
+                {
+                  "name": "email",
+                  "type": "string",
+                  "required": true,
+                  "description": "email for the users collection."
+                },
+                {
+                  "name": "password_hash",
+                  "type": "string",
+                  "required": true,
+                  "description": "password_hash for the users collection."
+                },
+                {
+                  "name": "role",
+                  "type": "string",
+                  "required": true,
+                  "description": "role for the users collection."
+                },
+                {
+                  "name": "is_verified",
+                  "type": "boolean",
+                  "required": true,
+                  "description": "is_verified for the users collection."
+                },
+                {
+                  "name": "created_at",
+                  "type": "date",
+                  "required": true,
+                  "description": "created_at for the users collection."
+                }
+              ]
+            },
+            {
+              "name": "socials",
+              "description": "Stores socials documents.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "Primary identifier for the socials collection."
+                },
+                {
+                  "name": "created_at",
+                  "type": "date",
+                  "required": true,
+                  "description": "Creation timestamp."
+                }
+              ]
+            },
+            {
+              "name": "medias",
+              "description": "Stores medias documents.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "Primary identifier for the medias collection."
+                },
+                {
+                  "name": "created_at",
+                  "type": "date",
+                  "required": true,
+                  "description": "Creation timestamp."
+                }
+              ]
+            },
+            {
+              "name": "media",
+              "description": "Stores media documents.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "Primary identifier for the media collection."
+                },
+                {
+                  "name": "created_at",
+                  "type": "date",
+                  "required": true,
+                  "description": "Creation timestamp."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "schemaSummary": "SQL postgresql: users, socials, medias, media | NoSQL mongodb: users, socials, medias, media",
+    "coreEntities": [
+      "users",
+      "socials",
+      "medias",
+      "media",
+      "users",
+      "socials",
+      "medias",
+      "media"
+    ],
+    "relationshipHints": [],
+    "fingerprint": "429dda18fc2576820c51b44f89615256015b25282572ee35e564f4ec2070a06a",
+    "createdAt": "2026-03-29T23:22:41.168Z"
+  },
+  {
+    "id": "generated_1774825479952",
+    "type": "generated",
+    "title": "simple ecommerce app",
+    "prompt": "simple ecommerce app",
+    "tags": [],
+    "sourceData": null,
+    "sourceSummary": "",
+    "domainSummary": "simple ecommerce app: simple ecommerce app",
+    "queryExpansion": "simple ecommerce app",
+    "schema": {
+      "architectures": [
+        {
+          "database_type": "sql",
+          "database_engine": "postgresql",
+          "use_case": "Best when strong relationships and transactional consistency matter.",
+          "tables": [
+            {
+              "name": "users",
+              "description": "Registered user accounts.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "id for the users table."
+                },
+                {
+                  "name": "email",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "email for the users table."
+                },
+                {
+                  "name": "password_hash",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "password_hash for the users table."
+                },
+                {
+                  "name": "role",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "role for the users table."
+                },
+                {
+                  "name": "is_verified",
+                  "type": "boolean",
+                  "required": true,
+                  "description": "is_verified for the users table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "created_at for the users table."
+                }
+              ]
+            },
+            {
+              "name": "ecommerces",
+              "description": "Stores ecommerces records.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "Primary key for the ecommerces table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "Timestamp when the ecommerces was created."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "database_type": "nosql",
+          "database_engine": "mongodb",
+          "use_case": "Best when flexible document structures are more important than joins.",
+          "collections": [
+            {
+              "name": "users",
+              "description": "User accounts.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "_id for the users collection."
+                },
+                {
+                  "name": "email",
+                  "type": "string",
+                  "required": true,
+                  "description": "email for the users collection."
+                },
+                {
+                  "name": "password_hash",
+                  "type": "string",
+                  "required": true,
+                  "description": "password_hash for the users collection."
+                },
+                {
+                  "name": "role",
+                  "type": "string",
+                  "required": true,
+                  "description": "role for the users collection."
+                },
+                {
+                  "name": "is_verified",
+                  "type": "boolean",
+                  "required": true,
+                  "description": "is_verified for the users collection."
+                },
+                {
+                  "name": "created_at",
+                  "type": "date",
+                  "required": true,
+                  "description": "created_at for the users collection."
+                }
+              ]
+            },
+            {
+              "name": "ecommerces",
+              "description": "Stores ecommerces documents.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "Primary identifier for the ecommerces collection."
+                },
+                {
+                  "name": "created_at",
+                  "type": "date",
+                  "required": true,
+                  "description": "Creation timestamp."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "schemaSummary": "SQL postgresql: users, ecommerces | NoSQL mongodb: users, ecommerces",
+    "coreEntities": [
+      "users",
+      "ecommerces",
+      "users",
+      "ecommerces"
+    ],
+    "relationshipHints": [],
+    "fingerprint": "fd49b177e5738a47a632c58fd18d57ec5d27a10b60b5bd4961a6688765fd0c2d",
+    "createdAt": "2026-03-29T23:04:39.952Z"
+  },
+  {
+    "id": "generated_1774821937940",
+    "type": "generated",
+    "title": "food delivery app",
+    "prompt": "food delivery app",
+    "tags": [],
+    "sourceData": null,
+    "sourceSummary": "",
+    "domainSummary": "food delivery app: food delivery app",
+    "queryExpansion": "food delivery app",
+    "schema": {
+      "architectures": [
+        {
+          "database_type": "sql",
+          "database_engine": "postgresql",
+          "use_case": "Best when strong relationships and transactional consistency matter.",
+          "tables": [
+            {
+              "name": "users",
+              "description": "Customers who place food orders.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "id for the users table."
+                },
+                {
+                  "name": "name",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "name for the users table."
+                },
+                {
+                  "name": "email",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "email for the users table."
+                },
+                {
+                  "name": "phone",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "phone for the users table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "created_at for the users table."
+                }
+              ]
+            },
+            {
+              "name": "restaurants",
+              "description": "Restaurants listed on the platform.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "id for the restaurants table."
+                },
+                {
+                  "name": "name",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "name for the restaurants table."
+                },
+                {
+                  "name": "cuisine_type",
+                  "type": "varchar",
+                  "required": false,
+                  "description": "cuisine_type for the restaurants table."
+                },
+                {
+                  "name": "address",
+                  "type": "text",
+                  "required": true,
+                  "description": "address for the restaurants table."
+                },
+                {
+                  "name": "is_active",
+                  "type": "boolean",
+                  "required": true,
+                  "description": "is_active for the restaurants table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "created_at for the restaurants table."
+                }
+              ]
+            },
+            {
+              "name": "menu_items",
+              "description": "Dishes offered by restaurants.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "id for the menu_items table."
+                },
+                {
+                  "name": "restaurant_id",
+                  "type": "uuid",
+                  "required": true,
+                  "foreign_key": "restaurants.id",
+                  "description": "restaurant_id for the menu_items table."
+                },
+                {
+                  "name": "name",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "name for the menu_items table."
+                },
+                {
+                  "name": "price",
+                  "type": "decimal",
+                  "required": true,
+                  "description": "price for the menu_items table."
+                },
+                {
+                  "name": "is_available",
+                  "type": "boolean",
+                  "required": true,
+                  "description": "is_available for the menu_items table."
+                }
+              ]
+            },
+            {
+              "name": "orders",
+              "description": "Customer orders placed at restaurants.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "id for the orders table."
+                },
+                {
+                  "name": "user_id",
+                  "type": "uuid",
+                  "required": true,
+                  "foreign_key": "users.id",
+                  "description": "user_id for the orders table."
+                },
+                {
+                  "name": "restaurant_id",
+                  "type": "uuid",
+                  "required": true,
+                  "foreign_key": "restaurants.id",
+                  "description": "restaurant_id for the orders table."
+                },
+                {
+                  "name": "delivery_partner_id",
+                  "type": "uuid",
+                  "required": false,
+                  "foreign_key": "delivery_partners.id",
+                  "description": "delivery_partner_id for the orders table."
+                },
+                {
+                  "name": "total_amount",
+                  "type": "decimal",
+                  "required": true,
+                  "description": "total_amount for the orders table."
+                },
+                {
+                  "name": "status",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "status for the orders table."
+                },
+                {
+                  "name": "created_at",
+                  "type": "timestamp",
+                  "required": true,
+                  "description": "created_at for the orders table."
+                }
+              ]
+            },
+            {
+              "name": "order_items",
+              "description": "Individual items within an order.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "id for the order_items table."
+                },
+                {
+                  "name": "order_id",
+                  "type": "uuid",
+                  "required": true,
+                  "foreign_key": "orders.id",
+                  "description": "order_id for the order_items table."
+                },
+                {
+                  "name": "menu_item_id",
+                  "type": "uuid",
+                  "required": true,
+                  "foreign_key": "menu_items.id",
+                  "description": "menu_item_id for the order_items table."
+                },
+                {
+                  "name": "quantity",
+                  "type": "integer",
+                  "required": true,
+                  "description": "quantity for the order_items table."
+                },
+                {
+                  "name": "unit_price",
+                  "type": "decimal",
+                  "required": true,
+                  "description": "unit_price for the order_items table."
+                }
+              ]
+            },
+            {
+              "name": "delivery_partners",
+              "description": "Riders who deliver orders.",
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "uuid",
+                  "primary": true,
+                  "required": true,
+                  "description": "id for the delivery_partners table."
+                },
+                {
+                  "name": "name",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "name for the delivery_partners table."
+                },
+                {
+                  "name": "phone",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "phone for the delivery_partners table."
+                },
+                {
+                  "name": "status",
+                  "type": "varchar",
+                  "required": true,
+                  "description": "status for the delivery_partners table."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "database_type": "nosql",
+          "database_engine": "mongodb",
+          "use_case": "Best when flexible document structures are more important than joins.",
+          "collections": [
+            {
+              "name": "restaurants",
+              "description": "Restaurant profiles with embedded menu.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "_id for the restaurants collection."
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "description": "name for the restaurants collection."
+                },
+                {
+                  "name": "cuisine_type",
+                  "type": "string",
+                  "required": false,
+                  "description": "cuisine_type for the restaurants collection."
+                },
+                {
+                  "name": "address",
+                  "type": "string",
+                  "required": true,
+                  "description": "address for the restaurants collection."
+                },
+                {
+                  "name": "menu_items",
+                  "type": "array",
+                  "required": true,
+                  "description": "menu_items for the restaurants collection."
+                },
+                {
+                  "name": "is_active",
+                  "type": "boolean",
+                  "required": true,
+                  "description": "is_active for the restaurants collection."
+                }
+              ]
+            },
+            {
+              "name": "orders",
+              "description": "Orders with embedded items.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "_id for the orders collection."
+                },
+                {
+                  "name": "user_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "user_id for the orders collection."
+                },
+                {
+                  "name": "restaurant_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "restaurant_id for the orders collection."
+                },
+                {
+                  "name": "items",
+                  "type": "array",
+                  "required": true,
+                  "description": "items for the orders collection."
+                },
+                {
+                  "name": "total_amount",
+                  "type": "number",
+                  "required": true,
+                  "description": "total_amount for the orders collection."
+                },
+                {
+                  "name": "status",
+                  "type": "string",
+                  "required": true,
+                  "description": "status for the orders collection."
+                },
+                {
+                  "name": "created_at",
+                  "type": "date",
+                  "required": true,
+                  "description": "created_at for the orders collection."
+                }
+              ]
+            },
+            {
+              "name": "users",
+              "description": "Customer profiles and addresses.",
+              "document_shape": [
+                {
+                  "name": "_id",
+                  "type": "objectId",
+                  "required": true,
+                  "description": "_id for the users collection."
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "required": true,
+                  "description": "name for the users collection."
+                },
+                {
+                  "name": "email",
+                  "type": "string",
+                  "required": true,
+                  "description": "email for the users collection."
+                },
+                {
+                  "name": "phone",
+                  "type": "string",
+                  "required": true,
+                  "description": "phone for the users collection."
+                },
+                {
+                  "name": "saved_addresses",
+                  "type": "array",
+                  "required": false,
+                  "description": "saved_addresses for the users collection."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "schemaSummary": "SQL postgresql: users, restaurants, menu_items, orders, order_items, delivery_partners | NoSQL mongodb: restaurants, orders, users",
+    "coreEntities": [
+      "users",
+      "restaurants",
+      "menu_items",
+      "orders",
+      "order_items",
+      "delivery_partners",
+      "restaurants",
+      "orders"
+    ],
+    "relationshipHints": [
+      "menu_items.restaurant_id -> restaurants.id",
+      "orders.user_id -> users.id",
+      "orders.restaurant_id -> restaurants.id",
+      "orders.delivery_partner_id -> delivery_partners.id",
+      "order_items.order_id -> orders.id",
+      "order_items.menu_item_id -> menu_items.id"
+    ],
+    "fingerprint": "757515b43fbecd59e08983980df62773ab1de88400dfce225b6022f76edd66e1",
+    "createdAt": "2026-03-29T22:05:37.940Z"
+  },
+  {
     "id": "generated_1774813355655",
     "type": "generated",
     "title": "i want a astrology dating app",

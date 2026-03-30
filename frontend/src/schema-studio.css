@@ -1031,6 +1031,39 @@ button, textarea { font: inherit; }
   box-shadow: 0 12px 32px rgba(79,70,229,0.55);
 }
 
+.openapi-format-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.openapi-format-btn {
+  padding: 5px 14px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: transparent;
+  color: #64748b;
+  transition: background 130ms ease, color 130ms ease;
+}
+
+.openapi-format-btn--active {
+  background: rgba(99,102,241,0.25);
+  color: #a5b4fc;
+}
+
+.openapi-format-btn:not(.openapi-format-btn--active):hover {
+  background: rgba(255,255,255,0.07);
+  color: #94a3b8;
+}
+
 .openapi-modal__body {
   flex: 1 1 0;
   min-height: 0;
@@ -1060,6 +1093,7 @@ button, textarea { font: inherit; }
 .oa-number  { color: #fbbf24; }   /* amber     — numbers */
 .oa-bool    { color: #f97316; }   /* orange    — booleans */
 .oa-null    { color: #f87171; }   /* rose      — null */
+.oa-comment { color: #475569; font-style: italic; } /* slate — yaml comment */
 .oa-punct   { color: #334155; }   /* slate     — braces & commas */
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
