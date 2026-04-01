@@ -13,6 +13,7 @@ import {
   addEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
 } from '@xyflow/react';
 import {
   ArrowRightLeft,
@@ -20,13 +21,16 @@ import {
   Cable,
   Check,
   ChevronDown,
+  ChevronRight,
   Clipboard,
   Database,
   Download,
   FileJson2,
+  GitBranch,
   LayoutGrid,
   PencilLine,
   Sparkles,
+  TrendingUp,
   WandSparkles,
   X,
   Zap,
@@ -37,18 +41,13 @@ import {
 // ---------------------------------------------------------------------------
 function OpenApiHighlight({ doc }) {
   const raw = JSON.stringify(doc, null, 2);
-
-  // Split into tokens: strings, numbers, booleans, nulls, punctuation
   const tokens = raw.split(
     /("(?:[^"\\]|\\.)*"(?:\s*:)?|true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}[\],:])/
   );
-
   return tokens.map((token, i) => {
     if (!token) return null;
-
-    // Key (string followed by colon)
     if (/^".*":$/.test(token)) {
-      const key = token.slice(0, -1); // remove trailing colon
+      const key = token.slice(0, -1);
       return (
         <React.Fragment key={i}>
           <span className="oa-key">{key}</span>
@@ -56,15 +55,10 @@ function OpenApiHighlight({ doc }) {
         </React.Fragment>
       );
     }
-    // String value
     if (/^"/.test(token)) return <span key={i} className="oa-string">{token}</span>;
-    // Boolean
     if (token === 'true' || token === 'false') return <span key={i} className="oa-bool">{token}</span>;
-    // Null
     if (token === 'null') return <span key={i} className="oa-null">{token}</span>;
-    // Number
     if (/^-?\d/.test(token)) return <span key={i} className="oa-number">{token}</span>;
-    // Punctuation / whitespace
     return <span key={i} className="oa-punct">{token}</span>;
   });
 }
@@ -74,28 +68,19 @@ function OpenApiHighlight({ doc }) {
 // ---------------------------------------------------------------------------
 function YamlHighlight({ text }) {
   return text.split('\n').map((line, i) => {
-    // Comment
     if (/^\s*#/.test(line)) {
       return <div key={i}><span className="oa-comment">{line}</span></div>;
     }
-    // Key: value  OR  key:
     const kvMatch = line.match(/^(\s*)([\w$@.-]+)(\s*:\s*)(.*)$/);
     if (kvMatch) {
       const [, indent, key, colon, rest] = kvMatch;
       let valueNode;
-      if (!rest) {
-        valueNode = null;
-      } else if (/^["']/.test(rest)) {
-        valueNode = <span className="oa-string">{rest}</span>;
-      } else if (/^(true|false)$/.test(rest)) {
-        valueNode = <span className="oa-bool">{rest}</span>;
-      } else if (/^null$/.test(rest)) {
-        valueNode = <span className="oa-null">{rest}</span>;
-      } else if (/^-?\d/.test(rest)) {
-        valueNode = <span className="oa-number">{rest}</span>;
-      } else {
-        valueNode = <span className="oa-string">{rest}</span>;
-      }
+      if (!rest) valueNode = null;
+      else if (/^["']/.test(rest)) valueNode = <span className="oa-string">{rest}</span>;
+      else if (/^(true|false)$/.test(rest)) valueNode = <span className="oa-bool">{rest}</span>;
+      else if (/^null$/.test(rest)) valueNode = <span className="oa-null">{rest}</span>;
+      else if (/^-?\d/.test(rest)) valueNode = <span className="oa-number">{rest}</span>;
+      else valueNode = <span className="oa-string">{rest}</span>;
       return (
         <div key={i}>
           {indent}
@@ -105,7 +90,6 @@ function YamlHighlight({ text }) {
         </div>
       );
     }
-    // List item
     if (/^\s*-\s/.test(line)) {
       const dashMatch = line.match(/^(\s*-\s)(.*)$/);
       if (dashMatch) {
@@ -121,6 +105,196 @@ function YamlHighlight({ text }) {
     return <div key={i}>{line}</div>;
   });
 }
+
+// ---------------------------------------------------------------------------
+// Tree Panel — hierarchical schema structure viewer
+// ---------------------------------------------------------------------------
+
+/** Single recursive tree node row */
+function TreeNode({ node, nodeMap, depth = 0, visited = new Set() }) {
+  const [open, setOpen] = useState(depth < 2);
+  const hasChildren = node.children && node.children.length > 0;
+  const typeColor = node.type === 'sql' ? 'var(--blue)' : node.type === 'nosql' ? 'var(--violet)' : 'var(--teal)';
+  const nextVisited = new Set(visited);
+  nextVisited.add(node.name);
+
+  return (
+    <div className="tree-node" style={{ '--depth': depth }}>
+      <div
+        className={`tree-node__row${node.isRoot ? ' tree-node__row--root' : ''}`}
+        onClick={() => hasChildren && setOpen((v) => !v)}
+        style={{ paddingLeft: `${12 + depth * 18}px` }}
+      >
+        <span className="tree-node__toggle">
+          {hasChildren
+            ? (open ? <ChevronDown size={12} /> : <ChevronRight size={12} />)
+            : <span style={{ width: 12, display: 'inline-block' }} />}
+        </span>
+        <span className="tree-node__dot" style={{ background: typeColor }} />
+        <span className="tree-node__name">{node.name}</span>
+        <span className="tree-node__type-badge" style={{ color: typeColor }}>
+          {node.type === 'both' ? 'SQL+NoSQL' : node.type?.toUpperCase()}
+        </span>
+      </div>
+      {open && hasChildren && (
+        <div className="tree-node__children">
+          {node.children.map((childName) => (
+            nextVisited.has(childName) ? (
+              <div
+                key={`${node.name}-${childName}-cycle`}
+                className="tree-node__row"
+                style={{ paddingLeft: `${30 + (depth + 1) * 18}px` }}
+              >
+                <span className="tree-node__toggle">
+                  <span style={{ width: 12, display: 'inline-block' }} />
+                </span>
+                <span className="tree-node__dot" style={{ background: typeColor }} />
+                <span className="tree-node__name">{childName}</span>
+                <span className="tree-node__type-badge" style={{ color: typeColor }}>
+                  LINK
+                </span>
+              </div>
+            ) : (
+              <TreeNode
+                key={childName}
+                node={nodeMap[childName] || { name: childName, type: node.type, isRoot: false, children: [] }}
+                nodeMap={nodeMap}
+                depth={depth + 1}
+                visited={nextVisited}
+              />
+            )
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Full tree panel — overlay on left side of canvas */
+function TreePanel({ tree, onClose }) {
+  if (!tree) return null;
+  const rootNodes = (tree.nodes || []).filter((n) => n.isRoot);
+  const otherNodes = (tree.nodes || []).filter((n) => !n.isRoot);
+
+  // Build a map for deep recursive rendering
+  const nodeMap = {};
+  for (const n of tree.nodes || []) nodeMap[n.name] = n;
+
+  const renderNode = (node, depth) => (
+    <TreeNode key={node.name} node={node} nodeMap={nodeMap} depth={depth} />
+  );
+
+  return (
+    <motion.div
+      className="tree-panel"
+      initial={{ x: -320, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: -320, opacity: 0 }}
+      transition={{ type: 'spring', damping: 26, stiffness: 240 }}
+    >
+      <div className="tree-panel__header">
+        <div className="tree-panel__header-left">
+          <GitBranch size={15} />
+          <span>Schema Tree</span>
+          <span className="tree-panel__root-label">{tree.root}</span>
+        </div>
+        <button type="button" className="icon-button" onClick={onClose}>
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="tree-panel__body">
+        <p className="tree-panel__section-label">Root Entities</p>
+        {rootNodes.length > 0
+          ? rootNodes.map((n) => renderNode(n, 0))
+          : <p className="tree-panel__empty">No root entities detected.</p>}
+
+        {otherNodes.length > 0 && (
+          <>
+            <p className="tree-panel__section-label" style={{ marginTop: 16 }}>All Entities</p>
+            {otherNodes.map((n) => renderNode(n, 1))}
+          </>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scores Meter — compact score display for sidebar
+// ---------------------------------------------------------------------------
+
+function ScoreMeter({ label, value }) {
+  const pct = Math.round((value || 0) * 100);
+  const color =
+    pct >= 55 ? 'var(--teal)' :
+    pct >= 35 ? 'var(--amber)' :
+    '#ef4444';
+
+  return (
+    <div className="score-meter">
+      <div className="score-meter__top">
+        <span className="score-meter__label">{label}</span>
+        <span className="score-meter__value" style={{ color }}>{pct}%</span>
+      </div>
+      <div className="score-meter__bar">
+        <div
+          className="score-meter__fill"
+          style={{ width: `${pct}%`, background: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ScoresCard({ scores }) {
+  if (!scores) return null;
+  return (
+    <div className="sidebar-card sidebar-card--scores">
+      <p className="sidebar-card__eyebrow">
+        <TrendingUp size={13} style={{ marginRight: 5 }} />
+        Match Scores
+      </p>
+      <div className="scores-grid">
+        <ScoreMeter label="Semantic" value={scores.semantic_score} />
+        <ScoreMeter label="Structural" value={scores.structural_score} />
+        <ScoreMeter label="Rel. Density" value={scores.relationship_density} />
+        <div className="score-overall">
+          <span>Overall</span>
+          <strong style={{
+            color: (scores.overall_score || 0) >= 0.55 ? 'var(--teal)' :
+                   (scores.overall_score || 0) >= 0.35 ? 'var(--amber)' : '#ef4444'
+          }}>
+            {Math.round((scores.overall_score || 0) * 100)}%
+          </strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Decision Badge — shows AI decision result in header
+// ---------------------------------------------------------------------------
+
+function DecisionBadge({ decision }) {
+  if (!decision) return null;
+  const isReconstruct = decision.action === 'RECONSTRUCT';
+
+  return (
+    <div className={`decision-badge decision-badge--${isReconstruct ? 'reconstruct' : 'refine'}`}>
+      <WandSparkles size={12} />
+      <span>AI: {decision.action}</span>
+      <span className="decision-badge__confidence">
+        {Math.round((decision.confidence || 0) * 100)}%
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Constants & helpers (unchanged)
+// ---------------------------------------------------------------------------
 
 const STORAGE_KEY = 'brmh-schema-preview';
 const NODE_WIDTH = 300;
@@ -144,7 +318,6 @@ function SchemaNode({ data, selected }) {
       <Handle type="target" position={Position.Left} className="node-handle node-handle--target" />
       <Handle type="source" position={Position.Right} className="node-handle node-handle--source" />
 
-      {/* Header — always visible, click to expand/collapse */}
       <div className="schema-node__header" onClick={() => setExpanded((v) => !v)}>
         <div className="schema-node__header-left">
           <p className="schema-node__eyebrow">{isSql ? 'TABLE' : 'COLLECTION'}</p>
@@ -159,12 +332,10 @@ function SchemaNode({ data, selected }) {
         </div>
       </div>
 
-      {/* Collapsed: show brief description only */}
       {!expanded && (
         <p className="schema-node__description">{data.description}</p>
       )}
 
-      {/* Expanded: full field list */}
       {expanded && (
         <div className="schema-node__fields">
           {data.fields.map((field) => (
@@ -188,8 +359,23 @@ function SchemaNode({ data, selected }) {
 
 const readStoredPayload = () => {
   try {
-    return JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
-  } catch (error) {
+    const raw = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
+    if (!raw) return null;
+
+    // Validate the payload has a usable schema structure.
+    // If it only has a single architecture (old pre-fix data), clear it so the
+    // user sees the empty state and regenerates rather than a misleading blank canvas.
+    const archs = raw?.schemaResult?.schema?.architectures || [];
+    const hasAnyColumns = archs.some(
+      (a) => (a.tables || a.collections || []).length > 0
+    );
+    if (!hasAnyColumns) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+
+    return raw;
+  } catch {
     return null;
   }
 };
@@ -198,7 +384,7 @@ const writeStoredPayload = (payload) => {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -294,22 +480,10 @@ const buildGraph = (payload, mode) => {
       type: 'smoothstep',
       label: edge.label,
       animated: true,
-      data: {
-        label: edge.label,
-        tone: mode === 'sql' ? '#5c8dff' : '#ff9f43',
-      },
-      style: {
-        stroke: mode === 'sql' ? '#5c8dff' : '#ff9f43',
-        strokeWidth: 3.5,
-      },
-      labelStyle: {
-        fill: '#41526b',
-        fontWeight: 800,
-        fontSize: 11,
-      },
-      labelBgStyle: {
-        fill: 'rgba(255,255,255,0.96)',
-      },
+      data: { label: edge.label, tone: mode === 'sql' ? '#5c8dff' : '#ff9f43' },
+      style: { stroke: mode === 'sql' ? '#5c8dff' : '#ff9f43', strokeWidth: 3.5 },
+      labelStyle: { fill: '#41526b', fontWeight: 800, fontSize: 11 },
+      labelBgStyle: { fill: 'rgba(255,255,255,0.96)' },
       labelBgPadding: [10, 6],
       labelBgBorderRadius: 999,
     }));
@@ -320,28 +494,42 @@ const buildGraph = (payload, mode) => {
 const prettyJson = (value) => {
   try {
     return JSON.stringify(value, null, 2);
-  } catch (error) {
+  } catch {
     return String(value);
   }
 };
 
+// ---------------------------------------------------------------------------
+// Main canvas
+// ---------------------------------------------------------------------------
+
 function StudioCanvas() {
+  const reactFlow = useReactFlow();
   const [payload, setPayload] = useState(readStoredPayload());
-  const [mode, setMode] = useState('sql');
+  const [mode, setMode] = useState(() => {
+    const storedArchitectures = readStoredPayload()?.schemaResult?.schema?.architectures || [];
+    const storedModes = storedArchitectures.map((item) => item.database_type).filter(Boolean);
+    if (storedModes.includes('sql')) return 'sql';
+    return storedModes[0] || 'sql';
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [augmentDrawerMode, setAugmentDrawerMode] = useState(null); // 'tables' | 'fields' | null
+  const [augmentDrawerMode, setAugmentDrawerMode] = useState(null);
   const [editPrompt, setEditPrompt] = useState('');
   const [augmentPrompt, setAugmentPrompt] = useState('');
   const [refineLoading, setRefineLoading] = useState(false);
   const [augmentLoading, setAugmentLoading] = useState(false);
   const [error, setError] = useState('');
   const [augmentError, setAugmentError] = useState('');
-  const [openApiDoc, setOpenApiDoc] = useState(null);       // null = closed, object = open
-  const [openApiYaml, setOpenApiYaml] = useState('');       // YAML string from server
-  const [openApiFormat, setOpenApiFormat] = useState('json'); // 'json' | 'yaml'
+  const [openApiDoc, setOpenApiDoc] = useState(null);
+  const [openApiYaml, setOpenApiYaml] = useState('');
+  const [openApiFormat, setOpenApiFormat] = useState('json');
   const [openApiLoading, setOpenApiLoading] = useState(false);
   const [openApiError, setOpenApiError] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Always show both buttons — mode availability is not gated on payload content.
+  // If a mode's architecture is missing, buildGraph returns empty nodes (blank canvas).
+  const MODE_BUTTONS = ['sql', 'nosql'];
 
   const graph = useMemo(() => buildGraph(payload, mode), [payload, mode]);
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
@@ -353,11 +541,12 @@ function StudioCanvas() {
   }, [graph, setEdges, setNodes]);
 
   useEffect(() => {
-    const availableModes = (payload?.schemaResult?.schema?.architectures || []).map((item) => item.database_type);
-    if (availableModes.length && !availableModes.includes(mode)) {
-      setMode(availableModes[0]);
-    }
-  }, [mode, payload]);
+    if (graph.nodes.length === 0) return;
+    const timer = window.setTimeout(() => {
+      reactFlow.fitView({ padding: 0.18, duration: 350, includeHiddenNodes: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [graph.nodes, graph.edges, mode, reactFlow]);
 
   const architectureCountLabel = mode === 'sql' ? 'Tables' : 'Collections';
 
@@ -370,22 +559,10 @@ function StudioCanvas() {
             type: 'smoothstep',
             label: 'manual link',
             animated: true,
-            data: {
-              label: 'manual link',
-              tone: mode === 'sql' ? '#5c8dff' : '#ff9f43',
-            },
-            style: {
-              stroke: mode === 'sql' ? '#5c8dff' : '#ff9f43',
-              strokeWidth: 3.5,
-            },
-            labelStyle: {
-              fill: '#41526b',
-              fontWeight: 800,
-              fontSize: 11,
-            },
-            labelBgStyle: {
-              fill: 'rgba(255,255,255,0.96)',
-            },
+            data: { label: 'manual link', tone: mode === 'sql' ? '#5c8dff' : '#ff9f43' },
+            style: { stroke: mode === 'sql' ? '#5c8dff' : '#ff9f43', strokeWidth: 3.5 },
+            labelStyle: { fill: '#41526b', fontWeight: 800, fontSize: 11 },
+            labelBgStyle: { fill: 'rgba(255,255,255,0.96)' },
             labelBgPadding: [10, 6],
             labelBgBorderRadius: 999,
           },
@@ -398,16 +575,13 @@ function StudioCanvas() {
 
   const refineSchema = useCallback(async () => {
     if (!editPrompt.trim()) return;
-
     const existingSchema = payload?.schemaResult?.schema;
     if (!existingSchema) {
       setError('No existing schema found. Generate a schema first.');
       return;
     }
-
     setRefineLoading(true);
     setError('');
-
     try {
       const editResponse = await fetch('/api/schema/edit', {
         method: 'POST',
@@ -415,11 +589,9 @@ function StudioCanvas() {
         body: JSON.stringify({ existingSchema, instruction: editPrompt }),
       });
       const editResult = await editResponse.json();
-
       if (!editResponse.ok || !editResult.success) {
-        throw new Error(editResult.error?.message || 'Unable to apply changes with the deterministic schema editor. Try being more specific about the table or field change you want.');
+        throw new Error(editResult.error?.message || 'Unable to apply changes.');
       }
-
       const nextPayload = { ...payload, schemaResult: editResult };
       setPayload(nextPayload);
       writeStoredPayload(nextPayload);
@@ -434,32 +606,23 @@ function StudioCanvas() {
 
   const augmentSchema = useCallback(async () => {
     if (!augmentPrompt.trim()) return;
-
     const existingSchema = payload?.schemaResult?.schema;
     if (!existingSchema) {
       setAugmentError('No existing schema found. Generate a schema first.');
       return;
     }
-
     setAugmentLoading(true);
     setAugmentError('');
-
     try {
       const response = await fetch('/api/schema/augment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          existingSchema,
-          instruction: augmentPrompt,
-          mode: augmentDrawerMode,
-        }),
+        body: JSON.stringify({ existingSchema, instruction: augmentPrompt, mode: augmentDrawerMode }),
       });
       const result = await response.json();
-
       if (!response.ok || !result.success) {
         throw new Error(result.error?.message || 'Unable to augment schema.');
       }
-
       const nextPayload = { ...payload, schemaResult: result };
       setPayload(nextPayload);
       writeStoredPayload(nextPayload);
@@ -483,9 +646,7 @@ function StudioCanvas() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           schema,
-          title: payload?.schemaForm?.prompt
-            ? `${payload.schemaForm.prompt} API`
-            : 'Generated API',
+          title: payload?.schemaForm?.prompt ? `${payload.schemaForm.prompt} API` : 'Generated API',
           version: '1.0.0',
           sourceArch: mode,
           format: 'yaml',
@@ -506,9 +667,7 @@ function StudioCanvas() {
 
   const copyOpenApi = useCallback(() => {
     if (!openApiDoc) return;
-    const text = openApiFormat === 'yaml'
-      ? openApiYaml
-      : JSON.stringify(openApiDoc, null, 2);
+    const text = openApiFormat === 'yaml' ? openApiYaml : JSON.stringify(openApiDoc, null, 2);
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
@@ -560,7 +719,7 @@ function StudioCanvas() {
 
             <div className="studio-header__actions">
               <div className="mode-switch">
-                {['sql', 'nosql'].map((item) => (
+                {MODE_BUTTONS.map((item) => (
                   <button
                     key={item}
                     type="button"
@@ -575,7 +734,8 @@ function StudioCanvas() {
             </div>
           </header>
 
-          <div className="flow-shell">
+          {/* Flow canvas */}
+          <div className="flow-shell" style={{ position: 'relative' }}>
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -604,10 +764,26 @@ function StudioCanvas() {
                 </div>
               </Panel>
             </ReactFlow>
+
+            {/* Empty state — shown when the selected mode has no architecture in the schema */}
+            {nodes.length === 0 && (
+              <div className="canvas-empty-state">
+                <div className="canvas-empty-state__card">
+                  {mode === 'sql' ? <Database size={22} /> : <Binary size={22} />}
+                  <p className="canvas-empty-state__title">
+                    No {mode.toUpperCase()} architecture in this schema
+                  </p>
+                  <p className="canvas-empty-state__sub">
+                    Regenerate with <strong>Database: Both</strong> from the dashboard to get both SQL and NoSQL views.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
         <aside className="studio-sidebar">
+          {/* Snapshot card */}
           <div className="sidebar-card">
             <p className="sidebar-card__eyebrow">Schema Snapshot</p>
             <div className="sidebar-card__stats">
@@ -630,6 +806,8 @@ function StudioCanvas() {
             </div>
           </div>
 
+          {/* Match scores — shown when present */}
+          {/* Schema actions */}
           <div className="sidebar-card">
             <p className="sidebar-card__eyebrow">Schema Actions</p>
             <div className="sidebar-actions">
@@ -650,7 +828,7 @@ function StudioCanvas() {
             </div>
           </div>
 
-          {/* ── OpenAPI Export Card ─────────────────────── */}
+          {/* OpenAPI export card */}
           <div className="sidebar-card sidebar-card--openapi">
             <div className="openapi-card__top">
               <div>
@@ -661,35 +839,24 @@ function StudioCanvas() {
               <FileJson2 size={28} className="openapi-card__icon" />
             </div>
             {openApiError ? <p className="openapi-card__error">{openApiError}</p> : null}
-            <button
-              type="button"
-              className="openapi-export-btn"
-              onClick={exportOpenApi}
-              disabled={openApiLoading}
-            >
+            <button type="button" className="openapi-export-btn" onClick={exportOpenApi} disabled={openApiLoading}>
               <Zap size={15} />
               {openApiLoading ? 'Generating…' : 'Generate OpenAPI Spec'}
             </button>
           </div>
 
+          {/* Visual notes */}
           <div className="sidebar-card">
             <p className="sidebar-card__eyebrow">Visual Notes</p>
             <div className="sidebar-card__list">
-              <div>
-                <ArrowRightLeft size={15} />
-                Drag blocks to reorganize the canvas.
-              </div>
-              <div>
-                <Cable size={15} />
-                Pull new wires from one side handle to another.
-              </div>
-              <div>
-                <WandSparkles size={15} />
-                Use Edit to regenerate instead of manually rewriting JSON.
-              </div>
+              <div><ArrowRightLeft size={15} />Drag blocks to reorganize the canvas.</div>
+              <div><Cable size={15} />Pull new wires from one side handle to another.</div>
+              <div><WandSparkles size={15} />Use Edit to regenerate instead of manually rewriting JSON.</div>
             </div>
           </div>
 
+          {/* Decision reasoning card — shown when AI decision engine ran */}
+          {/* Schema preview */}
           <div className="sidebar-card sidebar-card--code">
             <p className="sidebar-card__eyebrow">Schema Preview</p>
             <pre>{prettyJson(payload.schemaResult?.preview || '(empty)')}</pre>
@@ -697,15 +864,10 @@ function StudioCanvas() {
         </aside>
       </div>
 
-
+      {/* ── Augment drawer ──────────────────────────────── */}
       <AnimatePresence>
         {augmentDrawerMode ? (
-          <motion.div
-            className="refine-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
+          <motion.div className="refine-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <motion.div
               className="refine-drawer"
               initial={{ x: 120, opacity: 0 }}
@@ -739,15 +901,8 @@ function StudioCanvas() {
               />
               {augmentError ? <div className="refine-error">{augmentError}</div> : null}
               <div className="refine-drawer__actions">
-                <button type="button" className="secondary-pill" onClick={() => setAugmentDrawerMode(null)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="primary-pill"
-                  disabled={augmentLoading || !augmentPrompt.trim()}
-                  onClick={augmentSchema}
-                >
+                <button type="button" className="secondary-pill" onClick={() => setAugmentDrawerMode(null)}>Cancel</button>
+                <button type="button" className="primary-pill" disabled={augmentLoading || !augmentPrompt.trim()} onClick={augmentSchema}>
                   {augmentLoading ? 'Updating...' : 'Apply Changes'}
                 </button>
               </div>
@@ -756,14 +911,10 @@ function StudioCanvas() {
         ) : null}
       </AnimatePresence>
 
+      {/* ── Edit drawer ─────────────────────────────────── */}
       <AnimatePresence>
         {drawerOpen ? (
-          <motion.div
-            className="refine-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
+          <motion.div className="refine-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <motion.div
               className="refine-drawer"
               initial={{ x: 120, opacity: 0 }}
@@ -775,26 +926,21 @@ function StudioCanvas() {
                 <div>
                   <p className="studio-kicker">Prompt Refinement</p>
                   <h2>Make The Schema Better</h2>
-                  <p>Describe the schema changes in plain English. You can add, remove, rename, or combine multiple changes in one instruction.</p>
+                  <p>Describe the schema changes in plain English.</p>
                 </div>
                 <button type="button" className="icon-button" onClick={() => setDrawerOpen(false)}>
                   <X size={18} />
                 </button>
               </div>
-
               <textarea
                 value={editPrompt}
                 onChange={(event) => setEditPrompt(event.target.value)}
                 placeholder="Rename users to customers, remove delivery_partners, add coupons table, and add coupon_code to orders."
                 className="refine-drawer__textarea"
               />
-
               {error ? <div className="refine-error">{error}</div> : null}
-
               <div className="refine-drawer__actions">
-                <button type="button" className="secondary-pill" onClick={() => setDrawerOpen(false)}>
-                  Cancel
-                </button>
+                <button type="button" className="secondary-pill" onClick={() => setDrawerOpen(false)}>Cancel</button>
                 <button type="button" className="primary-pill" disabled={refineLoading || !editPrompt.trim()} onClick={refineSchema}>
                   {refineLoading ? 'Regenerating...' : 'Apply Changes'}
                 </button>
@@ -804,7 +950,7 @@ function StudioCanvas() {
         ) : null}
       </AnimatePresence>
 
-      {/* ── OpenAPI Viewer Modal ──────────────────────────── */}
+      {/* ── OpenAPI viewer modal ─────────────────────────── */}
       <AnimatePresence>
         {openApiDoc ? (
           <motion.div
@@ -821,13 +967,9 @@ function StudioCanvas() {
               exit={{ y: 60, opacity: 0, scale: 0.97 }}
               transition={{ type: 'spring', damping: 26, stiffness: 240 }}
             >
-              {/* Modal header */}
               <div className="openapi-modal__header">
                 <div className="openapi-modal__header-left">
-                  <span className="openapi-modal__badge">
-                    <FileJson2 size={13} />
-                    OpenAPI 3.1.0
-                  </span>
+                  <span className="openapi-modal__badge"><FileJson2 size={13} />OpenAPI 3.1.0</span>
                   <h2 className="openapi-modal__title">{openApiDoc.info?.title}</h2>
                   <p className="openapi-modal__meta">
                     {Object.keys(openApiDoc.components?.schemas || {}).length} schemas &middot;&nbsp;
@@ -836,46 +978,23 @@ function StudioCanvas() {
                   </p>
                 </div>
                 <div className="openapi-modal__header-right">
-                  {/* Format toggle */}
                   <div className="openapi-format-toggle">
-                    <button
-                      type="button"
-                      className={`openapi-format-btn${openApiFormat === 'json' ? ' openapi-format-btn--active' : ''}`}
-                      onClick={() => setOpenApiFormat('json')}
-                    >JSON</button>
-                    <button
-                      type="button"
-                      className={`openapi-format-btn${openApiFormat === 'yaml' ? ' openapi-format-btn--active' : ''}`}
-                      onClick={() => setOpenApiFormat('yaml')}
-                    >YAML</button>
+                    <button type="button" className={`openapi-format-btn${openApiFormat === 'json' ? ' openapi-format-btn--active' : ''}`} onClick={() => setOpenApiFormat('json')}>JSON</button>
+                    <button type="button" className={`openapi-format-btn${openApiFormat === 'yaml' ? ' openapi-format-btn--active' : ''}`} onClick={() => setOpenApiFormat('yaml')}>YAML</button>
                   </div>
-                  <button
-                    type="button"
-                    className="openapi-action-btn openapi-action-btn--copy"
-                    onClick={copyOpenApi}
-                  >
+                  <button type="button" className="openapi-action-btn openapi-action-btn--copy" onClick={copyOpenApi}>
                     {copied ? <Check size={14} /> : <Clipboard size={14} />}
                     {copied ? 'Copied!' : `Copy ${openApiFormat.toUpperCase()}`}
                   </button>
-                  <button
-                    type="button"
-                    className="openapi-action-btn openapi-action-btn--download"
-                    onClick={downloadOpenApi}
-                  >
+                  <button type="button" className="openapi-action-btn openapi-action-btn--download" onClick={downloadOpenApi}>
                     <Download size={14} />
                     {`Download .${openApiFormat}`}
                   </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => { setOpenApiDoc(null); setOpenApiError(''); }}
-                  >
+                  <button type="button" className="icon-button" onClick={() => { setOpenApiDoc(null); setOpenApiError(''); }}>
                     <X size={18} />
                   </button>
                 </div>
               </div>
-
-              {/* Scrollable body */}
               <div className="openapi-modal__body">
                 <pre className="openapi-modal__code">
                   {openApiFormat === 'yaml'
