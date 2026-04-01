@@ -19,11 +19,24 @@ const {
   validateSchemaWithAjv,
   buildValidationReport,
 } = require('./schemaConstraintEnricherService');
+const { buildTreeFromSchema, getRootNodes, getTreeEdges, formatRootLabel } = require('./schemaTreeService');
+const { evaluateSchemaMatch, detectIrrelevantEntities } = require('./schemaMatchScoringService');
+const { shouldInvokeAI, runDecisionEngine } = require('./schemaAiDecisionEngine');
+const {
+  parseEditContext,
+  lockManualNodes,
+  mergeWithProtection,
+  validateManualEditsPreserved,
+  stripManualMarkers,
+} = require('./schemaEditProtectionService');
 
 const MAX_REPAIR_ATTEMPTS = 2;
 const DEFAULT_SCHEMA_MAX_TOKENS = 4096;
 const SQL_ENGINES = new Set(['postgresql', 'mysql', 'sqlite', 'sqlserver']);
 const NOSQL_ENGINES = new Set(['mongodb', 'dynamodb', 'firestore', 'cassandra']);
+
+const deriveTreeRootLabel = (request, builderMeta) =>
+  formatRootLabel(builderMeta?.domain || builderMeta?.domainLabel || request.prompt);
 
 // ---------------------------------------------------------------------------
 // Output mode inference (kept for normaliseSchemaRequest compatibility)
@@ -155,6 +168,7 @@ const normalizeSchemaRequest = (payload = {}) => {
   return {
     prompt: userPrompt,
     sourceData: payload.sourceData ?? null,
+    editContext: payload.editContext ?? null,
     ...inferOutputMode({
       prompt: userPrompt,
       database: payload.database,
@@ -246,7 +260,10 @@ const tryEnhanceWithAi = async ({ schema, request, memoryContexts }) => {
 const generateSchema = async (payload = {}) => {
   const request = normalizeSchemaRequest(payload);
 
-  // ── Step 1: Deterministic schema build (no AI) ───────────────────────────
+  // ── Step 1: Parse manual edit context ────────────────────────────────────
+  const parsedEditContext = parseEditContext(request.editContext);
+
+  // ── Step 2: Deterministic schema build (no AI) ───────────────────────────
   const { architectures, meta: builderMeta } = buildSchema({
     prompt: request.prompt,
     sourceData: request.sourceData,
@@ -256,26 +273,86 @@ const generateSchema = async (payload = {}) => {
 
   let schema = { architectures };
 
-  // ── Step 2: Validate deterministic output ────────────────────────────────
+  // ── Step 3: Validate deterministic output ────────────────────────────────
   const deterministicValidation = validateSchemaShape(schema);
   if (!deterministicValidation.valid) {
     throw new Error(`Deterministic schema build failed validation: ${deterministicValidation.errors.join(' ')}`);
   }
 
-  // ── Step 3: Retrieve memory context (for AI enhancement prompt) ──────────
+  // ── Step 4: Lock manual nodes before any AI pass ─────────────────────────
+  const lockedSchema = lockManualNodes(schema, parsedEditContext);
+
+  // ── Step 5: Retrieve memory context ──────────────────────────────────────
   const memoryContexts = await getRelevantSchemaMemories({
     prompt: request.prompt,
     sourceData: request.sourceData,
   });
 
-  // ── Step 4: Optional AI enhancement pass ─────────────────────────────────
-  const { schema: finalSchema, aiUsed, repairAttempt, llmMeta } = await tryEnhanceWithAi({
-    schema,
-    request,
-    memoryContexts,
-  });
+  // ── Step 6: Compute match scores ─────────────────────────────────────────
+  const scores = evaluateSchemaMatch(request.prompt, memoryContexts, lockedSchema);
+  const irrelevantCheck = detectIrrelevantEntities(request.prompt, lockedSchema);
 
-  // ── Step 5: Post-processing (deterministic) ───────────────────────────────
+  // ── Step 7: AI path — decision engine OR standard enhancement ────────────
+  let finalSchema;
+  let aiUsed = false;
+  let repairAttempt = 0;
+  let llmMeta = null;
+  let decisionResult = null;
+
+  if (shouldInvokeAI(scores, irrelevantCheck)) {
+    // Scores failed threshold or irrelevant entities detected — run full decision engine
+    decisionResult = await runDecisionEngine({
+      prompt: request.prompt,
+      existingSchema: lockedSchema,
+      retrievedSchemas: memoryContexts,
+      scores,
+      editContext: request.editContext,
+      provider: request.provider,
+      model: request.model,
+      maxTokens: request.maxTokens,
+      timeout: request.timeout,
+      options: request.options,
+      outputMode: request.outputMode,
+    });
+
+    // Merge AI output with manual-protected original
+    finalSchema = mergeWithProtection(
+      decisionResult.schema,
+      lockedSchema,
+      parsedEditContext
+    );
+    aiUsed = decisionResult.meta.ai_used;
+  } else {
+    // Scores passed — optional light enhancement pass (existing behaviour)
+    const enhancementResult = await tryEnhanceWithAi({
+      schema: lockedSchema,
+      request,
+      memoryContexts,
+    });
+
+    // Merge enhancement output with manual-protected original
+    finalSchema = mergeWithProtection(
+      enhancementResult.schema,
+      lockedSchema,
+      parsedEditContext
+    );
+    aiUsed = enhancementResult.aiUsed;
+    repairAttempt = enhancementResult.repairAttempt;
+    llmMeta = enhancementResult.llmMeta;
+  }
+
+  // ── Step 8: Audit — verify manual edits were preserved ───────────────────
+  const editAudit = validateManualEditsPreserved(lockedSchema, finalSchema, parsedEditContext);
+  if (!editAudit.preserved) {
+    // Safety fallback: restore full locked schema so manual work is never lost
+    console.warn('[schemaGenerator] Manual edit violations detected — reverting to locked schema.', editAudit.violations);
+    finalSchema = stripManualMarkers(lockedSchema);
+  }
+
+  // ── Step 9: Strip internal markers ───────────────────────────────────────
+  finalSchema = stripManualMarkers(finalSchema);
+
+  // ── Step 10: Post-processing (deterministic) ──────────────────────────────
   const relationshipSchema = enhanceSchemaRelationships(finalSchema);
   const finalValidation = validateSchemaShape(relationshipSchema);
 
@@ -283,14 +360,18 @@ const generateSchema = async (payload = {}) => {
     throw new Error(`Schema is invalid after post-processing: ${finalValidation.errors.join(' ')}`);
   }
 
-  // ── Step 5b: Constraint enrichment — enums, validation rules, precise SQL types
+  // ── Step 11: Constraint enrichment + AJV validation ──────────────────────
   const enhancedSchema = enrichSchemaConstraints(relationshipSchema);
-
-  // ── Step 5c: AJV JSON Schema 2020-12 validation of the enriched schema object
   const ajvReport = validateSchemaWithAjv(enhancedSchema);
   const validationReport = buildValidationReport(enhancedSchema);
 
-  // ── Step 6: Persist to memory ────────────────────────────────────────────
+  // ── Step 12: Build tree + UI hints ───────────────────────────────────────
+  const tree =
+    decisionResult?.tree ??
+    buildTreeFromSchema(enhancedSchema, deriveTreeRootLabel(request, builderMeta));
+  const ui_hints = decisionResult?.ui_hints ?? buildDefaultUiHints(enhancedSchema, tree);
+
+  // ── Step 13: Persist to memory ───────────────────────────────────────────
   storeGeneratedSchemaMemory({
     prompt: request.prompt,
     sourceData: request.sourceData,
@@ -302,6 +383,8 @@ const generateSchema = async (payload = {}) => {
     success: true,
     message: 'Schema generated successfully.',
     schema: enhancedSchema,
+    tree,
+    ui_hints,
     preview: buildSchemaPreview(enhancedSchema),
     sql: request.includeSql ? convertSchemaToSql(enhancedSchema) : null,
     prompt: request.prompt,
@@ -310,6 +393,14 @@ const generateSchema = async (payload = {}) => {
       ajv: ajvReport,
       fieldReport: validationReport,
     },
+    scores,
+    decision: decisionResult
+      ? {
+          action: decisionResult.decision,
+          confidence: decisionResult.confidence,
+          reasoning_summary: decisionResult.reasoning_summary,
+        }
+      : null,
     meta: {
       domain: builderMeta.domain,
       domainLabel: builderMeta.domainLabel,
@@ -320,8 +411,11 @@ const generateSchema = async (payload = {}) => {
       extraEntities: builderMeta.extraEntities,
       deterministic: true,
       aiEnhanced: aiUsed,
-      provider: llmMeta?.provider || null,
-      model: llmMeta?.model || null,
+      decisionEngineInvoked: !!decisionResult,
+      manualNodesProtected: [...parsedEditContext.protectedNodes],
+      editAuditPassed: editAudit.preserved,
+      provider: llmMeta?.provider || (decisionResult?.meta?.provider) || null,
+      model: llmMeta?.model || (decisionResult?.meta?.model) || null,
       maxTokens: request.maxTokens,
       memoryHits: memoryContexts.length,
       memoryBackend: getMemoryBackend(),
@@ -330,6 +424,31 @@ const generateSchema = async (payload = {}) => {
       durationMs: llmMeta?.meta?.durationMs || null,
       stopReason: llmMeta?.meta?.stopReason || null,
     },
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Default UI hints (used when decision engine was NOT invoked)
+// ---------------------------------------------------------------------------
+
+const buildDefaultUiHints = (schema, tree) => {
+  const rootNodes = getRootNodes(tree);
+  const edges = getTreeEdges(tree);
+
+  const primaryEntities = rootNodes.length > 0
+    ? rootNodes
+    : tree.nodes.slice(0, 3).map((n) => n.name);
+
+  const suggestedConnections = edges.slice(0, 8).map(([parent, child]) => ({
+    from: parent,
+    to: child,
+    label: `${parent} → ${child}`,
+  }));
+
+  return {
+    root_node: tree.root,
+    primary_entities: primaryEntities,
+    suggested_connections: suggestedConnections,
   };
 };
 
